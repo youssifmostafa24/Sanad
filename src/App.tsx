@@ -54,6 +54,44 @@ export default function App() {
     return getInitialData();
   });
 
+  // جلب البيانات من Supabase عند فتح التطبيق لضمان مزامنة السجلات
+  useEffect(() => {
+    async function fetchRecordsFromSupabase() {
+      try {
+        const { data: records, error } = await supabase.from('quran_records').select('*');
+        if (error || !records || records.length === 0) return;
+
+        setData((prev) => {
+          const updatedStudents = prev.students.map((student) => {
+            // تصفية السجلات الخاصة بهذا الطالب من قاعدة البيانات
+            const studentRecords = records.filter((r) => r.student_id === student.id);
+            if (studentRecords.length === 0) return student;
+
+            const mappedEntries: Entry[] = studentRecords.map((rec) => ({
+              id: rec.id,
+              date: rec.created_at ? rec.created_at.split('T')[0] : formatLocalDate(new Date()),
+              hifzText: normalizeQuranHomeworkText(rec.surah_name || ''),
+              hifzGrade: rec.rating && !isNaN(Number(rec.rating)) ? Number(rec.rating) : null,
+              murajaaText: '',
+              murajaaGrade: null,
+            }));
+
+            return {
+              ...student,
+              entries: mappedEntries.length > 0 ? mappedEntries : student.entries,
+            };
+          });
+
+          return { ...prev, students: updatedStudents };
+        });
+      } catch (err) {
+        console.error('خطأ في جلب السجلات من Supabase:', err);
+      }
+    }
+
+    fetchRecordsFromSupabase();
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -268,7 +306,7 @@ export default function App() {
     lastScrollYRef.current = currentY;
   };
 
-  // 1. تحديث الواجب (إضافة سطر جديد مستقل في Supabase)
+  // 1. تحديث الواجب وإرساله لـ Supabase
   const handleUpdateEntry = async (updated: Entry) => {
     if (!activeStudent) return;
     setData((prev) => {
@@ -312,7 +350,7 @@ export default function App() {
     });
   };
 
-  // 2. تكرار الواجب (إضافة سطر جديد مستقل في Supabase)
+  // 2. تكرار الواجب وإرساله كسطر جديد لـ Supabase
   const handleDuplicateEntry = async (entry: Entry) => {
     if (!activeStudent) return;
     const attendanceSchedule =
@@ -365,7 +403,7 @@ export default function App() {
     return [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
   }, [activeStudent]);
 
-  // 3. إضافة واجب جديد (إضافة سطر جديد مستقل تماماً في Supabase)
+  // 3. إضافة واجب جديد وإرساله كسطر جديد لـ Supabase
   const handleRepeatLastHomework = async (last: Entry | null) => {
     if (!activeStudent) return;
     const todayStr = formatLocalDate(new Date());
