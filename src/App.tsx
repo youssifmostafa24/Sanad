@@ -268,6 +268,7 @@ export default function App() {
     lastScrollYRef.current = currentY;
   };
 
+  // 1. تحديث الواجب (إضافة سطر جديد مستقل في Supabase)
   const handleUpdateEntry = async (updated: Entry) => {
     if (!activeStudent) return;
     setData((prev) => {
@@ -282,13 +283,14 @@ export default function App() {
     });
 
     try {
-      await supabase
-        .from('quran_records')
-        .upsert({
+      await supabase.from('quran_records').insert([
+        {
           student_id: activeStudent.id,
           surah_name: updated.hifzText || updated.murajaaText || 'تسميع',
           rating: String(updated.hifzGrade ?? updated.murajaaGrade ?? '100'),
-        });
+          created_at: new Date(updated.date).toISOString(),
+        },
+      ]);
     } catch (err) {
       console.error('خطأ في إرسال التعديل لـ Supabase:', err);
     }
@@ -308,6 +310,7 @@ export default function App() {
     });
   };
 
+  // 2. تكرار الواجب (إضافة سطر جديد مستقل في Supabase)
   const handleDuplicateEntry = async (entry: Entry) => {
     if (!activeStudent) return;
     const attendanceSchedule =
@@ -342,6 +345,7 @@ export default function App() {
           student_id: activeStudent.id,
           surah_name: entry.hifzText || entry.murajaaText || 'تسميع مكرر',
           rating: 'لم يقيم بعد',
+          created_at: new Date(nextDate).toISOString(),
         },
       ]);
     } catch (err) {
@@ -357,6 +361,7 @@ export default function App() {
     return [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
   }, [activeStudent]);
 
+  // 3. إضافة واجب جديد (إضافة سطر جديد مستقل تماماً في Supabase)
   const handleRepeatLastHomework = async (last: Entry | null) => {
     if (!activeStudent) return;
     const todayStr = formatLocalDate(new Date());
@@ -394,6 +399,7 @@ export default function App() {
           student_id: activeStudent.id,
           surah_name: last?.hifzText || last?.murajaaText || 'واجب جديد',
           rating: '100',
+          created_at: new Date(targetDate).toISOString(),
         },
       ]);
     } catch (err) {
