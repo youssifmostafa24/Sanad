@@ -287,6 +287,8 @@ export default function App() {
         {
           student_id: activeStudent.id,
           surah_name: updated.hifzText || updated.murajaaText || 'تسميع',
+          from_verse: 1,
+          to_verse: 1,
           rating: String(updated.hifzGrade ?? updated.murajaaGrade ?? '100'),
           created_at: new Date(updated.date).toISOString(),
         },
@@ -344,6 +346,8 @@ export default function App() {
         {
           student_id: activeStudent.id,
           surah_name: entry.hifzText || entry.murajaaText || 'تسميع مكرر',
+          from_verse: 1,
+          to_verse: 1,
           rating: 'لم يقيم بعد',
           created_at: new Date(nextDate).toISOString(),
         },
@@ -398,6 +402,8 @@ export default function App() {
         {
           student_id: activeStudent.id,
           surah_name: last?.hifzText || last?.murajaaText || 'واجب جديد',
+          from_verse: 1,
+          to_verse: 1,
           rating: '100',
           created_at: new Date(targetDate).toISOString(),
         },
