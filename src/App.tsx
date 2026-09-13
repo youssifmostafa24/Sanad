@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Family, Student, Entry, SurahMemorizationStatus } from './types';
 import { getInitialData } from './data/seedData';
-import { supabase } from './lib/supabase'; // استدعاء عميل Supabase
+import { supabase } from './lib/supabase';
 import {
   formatLocalDate,
   parseLocalDate,
@@ -31,7 +31,6 @@ import { BookOpen } from 'lucide-react';
 const STORAGE_KEY = 'sanad_homework_data_v5';
 
 export default function App() {
-  // Load data from localStorage or seed
   const [data, setData] = useState<{ families: Family[]; students: Student[] }>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -55,7 +54,6 @@ export default function App() {
     return getInitialData();
   });
 
-  // Save to localStorage on changes
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -64,7 +62,6 @@ export default function App() {
     }
   }, [data]);
 
-  // Read URL query parameter for family (?fam=<familyId>)
   const [activeFamilyId, setActiveFamilyId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const famParam = params.get('fam');
@@ -74,21 +71,17 @@ export default function App() {
     return data.families[0]?.id || 'family-1';
   });
 
-  // View state: 'portal' vs 'family'
   const [currentView, setCurrentView] = useState<'portal' | 'family'>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('fam') ? 'family' : 'portal';
   });
 
-  // Persistent Teacher Authentication state
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(() => {
     return isTeacherAuthenticatedStored();
   });
 
-  // Teacher mode active status
   const [isTeacherMode, setIsTeacherMode] = useState<boolean>(false);
 
-  // Modals state
   const [isFamilyAttendanceOpen, setIsFamilyAttendanceOpen] = useState<boolean>(false);
   const [attendanceModalStudentId, setAttendanceModalStudentId] = useState<string | null>(null);
   const [selectedSurahStudent, setSelectedSurahStudent] = useState<Student | null>(null);
@@ -108,10 +101,8 @@ export default function App() {
     setIsTeacherMode((prev) => !prev);
   };
 
-  // Slide-out sidebar drawer state
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-  // Header auto-hide
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
   const lastScrollYRef = useRef<number>(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -120,14 +111,12 @@ export default function App() {
     return data.families.find((f) => f.id === activeFamilyId) || data.families[0] || null;
   }, [data.families, activeFamilyId]);
 
-  // Students available in current view
   const visibleStudents = useMemo(() => {
     if (!activeFamily) return data.students;
     const famStudents = data.students.filter((s) => activeFamily.studentIds.includes(s.id));
     return famStudents.length > 0 ? famStudents : data.students;
   }, [data.students, activeFamily]);
 
-  // Active student state
   const [activeStudentId, setActiveStudentId] = useState<string>(() => {
     return visibleStudents[0]?.id || data.students[0]?.id || '';
   });
@@ -175,7 +164,6 @@ export default function App() {
     }
   };
 
-  // Monthly Navigation State
   const now = new Date();
   const [selectedYearMonth, setSelectedYearMonth] = useState<{ year: number; month: number }>(() => ({
     year: now.getFullYear(),
@@ -280,7 +268,6 @@ export default function App() {
     lastScrollYRef.current = currentY;
   };
 
-  // تحديث الواجب وحفظ التعديلات في Supabase
   const handleUpdateEntry = async (updated: Entry) => {
     if (!activeStudent) return;
     setData((prev) => {
@@ -294,14 +281,13 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    // إرسال التحديث لـ Supabase
     try {
       await supabase
         .from('quran_records')
         .upsert({
           student_id: activeStudent.id,
           surah_name: updated.hifzText || updated.murajaaText || 'تسميع',
-          rating: updated.hifzGrade || updated.murajaaGrade || '100',
+          rating: String(updated.hifzGrade ?? updated.murajaaGrade ?? '100'),
         });
     } catch (err) {
       console.error('خطأ في إرسال التعديل لـ Supabase:', err);
@@ -322,7 +308,6 @@ export default function App() {
     });
   };
 
-  // تكرار الواجب وإرساله مباشرة لـ Supabase
   const handleDuplicateEntry = async (entry: Entry) => {
     if (!activeStudent) return;
     const attendanceSchedule =
@@ -351,7 +336,6 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    // إرسال الواجب المكرر لـ Supabase
     try {
       await supabase.from('quran_records').insert([
         {
@@ -373,7 +357,6 @@ export default function App() {
     return [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
   }, [activeStudent]);
 
-  // زر تكرار الواجب الأخير من المعلم وإرساله لـ Supabase
   const handleRepeatLastHomework = async (last: Entry | null) => {
     if (!activeStudent) return;
     const todayStr = formatLocalDate(new Date());
@@ -405,7 +388,6 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    // إرسال الواجب لـ Supabase تلقائياً
     try {
       await supabase.from('quran_records').insert([
         {
@@ -482,22 +464,6 @@ export default function App() {
         return s;
       });
       return { ...prev, students: updatedStudents };
-    });
-  };
-
-  const handleSaveFamilyAttendance = (familyId: string, days: number[]) => {
-    setData((prev) => {
-      const updatedFamilies = prev.families.map((f) =>
-        f.id === familyId ? { ...f, attendanceDays: days } : f
-      );
-      const targetFam = prev.families.find((f) => f.id === familyId);
-      const updatedStudents = prev.students.map((s) => {
-        if (targetFam?.studentIds.includes(s.id)) {
-          return { ...s, attendanceDays: days };
-        }
-        return s;
-      });
-      return { ...prev, families: updatedFamilies, students: updatedStudents };
     });
   };
 
