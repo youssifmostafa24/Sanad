@@ -230,41 +230,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                   </select>
                 </div>
 
-                {/* Dropdown 2: الآية الكبرى (الرقم الأكبر) بخط كبير */}
-                <div className="w-20 sm:w-26 shrink-0">
-                  <label
-                    htmlFor="picker-to-ayah-select"
-                    className="block text-[11px] font-bold text-[#5B6478] mb-1 text-center"
-                  >
-                    إلى:
-                  </label>
-                  <select
-                    id="picker-to-ayah-select"
-                    value={toAyah}
-                    onChange={(e) => handleToAyahChange(Number(e.target.value))}
-                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
-                    title="الرقم الأكبر"
-                  >
-                    {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => {
-                      const isLast = n === currentSurah.ayahCount;
-                      return (
-                        <option key={`to-${n}`} value={n}>
-                          {isLast && fromAyah === 1 ? `${n} (end-1)` : n}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                {/* Arrow: سهم يوضح من إلى */}
-                <div
-                  className="shrink-0 flex items-center justify-center text-[#0E5C56] pt-5 px-0.5"
-                  title="إلى"
-                >
-                  <ArrowLeft className="w-5 h-5 font-black stroke-[2.5]" />
-                </div>
-
-                {/* Dropdown 3: الآية الصغرى (الرقم الأصغر) بخط كبير */}
+                {/* Dropdown 2: الآية الصغرى (من) بخط كبير */}
                 <div className="w-20 sm:w-26 shrink-0">
                   <label
                     htmlFor="picker-from-ayah-select"
@@ -277,13 +243,47 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                     value={fromAyah}
                     onChange={(e) => handleFromAyahChange(Number(e.target.value))}
                     className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
-                    title="الرقم الأصغر"
+                    title="الرقم الأصغر (من)"
                   >
                     {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
                       <option key={`from-${n}`} value={n}>
                         {n}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Arrow: سهم يوضح من إلى */}
+                <div
+                  className="shrink-0 flex items-center justify-center text-[#0E5C56] pt-5 px-0.5"
+                  title="إلى"
+                >
+                  <ArrowLeft className="w-5 h-5 font-black stroke-[2.5]" />
+                </div>
+
+                {/* Dropdown 3: الآية الكبرى (إلى) بخط كبير */}
+                <div className="w-20 sm:w-26 shrink-0">
+                  <label
+                    htmlFor="picker-to-ayah-select"
+                    className="block text-[11px] font-bold text-[#5B6478] mb-1 text-center"
+                  >
+                    إلى:
+                  </label>
+                  <select
+                    id="picker-to-ayah-select"
+                    value={toAyah}
+                    onChange={(e) => handleToAyahChange(Number(e.target.value))}
+                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
+                    title="الرقم الأكبر (إلى)"
+                  >
+                    {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => {
+                      const isLast = n === currentSurah.ayahCount;
+                      return (
+                        <option key={`to-${n}`} value={n}>
+                          {isLast && fromAyah === 1 ? `${n} (end-1)` : n}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
