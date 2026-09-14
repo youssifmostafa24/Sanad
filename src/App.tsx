@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Family, Student, Entry, SurahMemorizationStatus } from './types';
 import { getInitialData } from './data/seedData';
-import { supabase } from './lib/supabase';
 import {
   formatLocalDate,
   parseLocalDate,
@@ -21,16 +20,25 @@ import { MainPortal } from './components/MainPortal';
 import { StudentAttendanceModal } from './components/StudentAttendanceModal';
 import { SurahProgressModal } from './components/SurahProgressModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import {
-  isTeacherAuthenticatedStored,
-  setTeacherAuthenticatedStored,
-} from './utils/authUtils';
+import { isTeacherAuthenticatedStored, setTeacherAuthenticatedStored } from './utils/authUtils';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
 import { BookOpen } from 'lucide-react';
+import { isSupabaseConfigured } from './lib/supabase';
+import {
+  fetchAllDataFromSupabase,
+  upsertEntryInSupabase,
+  deleteEntryInSupabase,
+  updateStudentSurahRatingsInSupabase,
+  updateStudentTilawaInSupabase,
+  updateStudentAttendanceInSupabase,
+  updateFamilyAttendanceInSupabase,
+  subscribeToSupabaseChanges,
+} from './services/supabaseService';
 
 const STORAGE_KEY = 'sanad_homework_data_v5';
 
 export default function App() {
+  // Load data from localStorage or seed
   const [data, setData] = useState<{ families: Family[]; students: Student[] }>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -54,44 +62,7 @@ export default function App() {
     return getInitialData();
   });
 
-  // جلب البيانات من Supabase عند فتح التطبيق لضمان مزامنة السجلات
-  useEffect(() => {
-    async function fetchRecordsFromSupabase() {
-      try {
-        const { data: records, error } = await supabase.from('quran_records').select('*');
-        if (error || !records || records.length === 0) return;
-
-        setData((prev) => {
-          const updatedStudents = prev.students.map((student) => {
-            // تصفية السجلات الخاصة بهذا الطالب من قاعدة البيانات
-            const studentRecords = records.filter((r) => r.student_id === student.id);
-            if (studentRecords.length === 0) return student;
-
-            const mappedEntries: Entry[] = studentRecords.map((rec) => ({
-              id: rec.id,
-              date: rec.created_at ? rec.created_at.split('T')[0] : formatLocalDate(new Date()),
-              hifzText: normalizeQuranHomeworkText(rec.surah_name || ''),
-              hifzGrade: rec.rating && !isNaN(Number(rec.rating)) ? Number(rec.rating) : null,
-              murajaaText: '',
-              murajaaGrade: null,
-            }));
-
-            return {
-              ...student,
-              entries: mappedEntries.length > 0 ? mappedEntries : student.entries,
-            };
-          });
-
-          return { ...prev, students: updatedStudents };
-        });
-      } catch (err) {
-        console.error('خطأ في جلب السجلات من Supabase:', err);
-      }
-    }
-
-    fetchRecordsFromSupabase();
-  }, []);
-
+  // Save to localStorage on changes (always acts as robust local cache)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -100,6 +71,46 @@ export default function App() {
     }
   }, [data]);
 
+  // Supabase Real-time Cloud Synchronization
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    let isMounted = true;
+    const loadFromSupabase = async () => {
+      try {
+        const remoteData = await fetchAllDataFromSupabase();
+        if (remoteData && isMounted && remoteData.families.length > 0) {
+          setData(remoteData);
+          setIsSupabaseConnected(true);
+        }
+      } catch (err) {
+        console.error('Error loading data from Supabase:', err);
+      }
+    };
+
+    loadFromSupabase();
+
+    // Subscribe to realtime database changes from other clients/devices
+    const unsubscribe = subscribeToSupabaseChanges(async () => {
+      try {
+        const remoteData = await fetchAllDataFromSupabase();
+        if (remoteData && isMounted && remoteData.families.length > 0) {
+          setData(remoteData);
+        }
+      } catch (err) {
+        console.warn('Realtime fetch error:', err);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Read URL query parameter for family (?fam=<familyId>)
   const [activeFamilyId, setActiveFamilyId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const famParam = params.get('fam');
@@ -109,17 +120,21 @@ export default function App() {
     return data.families[0]?.id || 'family-1';
   });
 
+  // View state: 'portal' (Master 3-families landing portal) vs 'family' (individual family page)
   const [currentView, setCurrentView] = useState<'portal' | 'family'>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('fam') ? 'family' : 'portal';
   });
 
+  // Persistent Teacher Authentication state (Password: 122333 / ١٢٢٣٣٣)
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(() => {
     return isTeacherAuthenticatedStored();
   });
 
+  // Teacher mode active status
   const [isTeacherMode, setIsTeacherMode] = useState<boolean>(false);
 
+  // Modals state
   const [isFamilyAttendanceOpen, setIsFamilyAttendanceOpen] = useState<boolean>(false);
   const [attendanceModalStudentId, setAttendanceModalStudentId] = useState<string | null>(null);
   const [selectedSurahStudent, setSelectedSurahStudent] = useState<Student | null>(null);
@@ -139,8 +154,10 @@ export default function App() {
     setIsTeacherMode((prev) => !prev);
   };
 
+  // Slide-out sidebar drawer state for student pages navigation
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
+  // Header auto-hide on scroll-down, show on scroll-up
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
   const lastScrollYRef = useRef<number>(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -149,16 +166,19 @@ export default function App() {
     return data.families.find((f) => f.id === activeFamilyId) || data.families[0] || null;
   }, [data.families, activeFamilyId]);
 
+  // Students available in current view
   const visibleStudents = useMemo(() => {
     if (!activeFamily) return data.students;
     const famStudents = data.students.filter((s) => activeFamily.studentIds.includes(s.id));
     return famStudents.length > 0 ? famStudents : data.students;
   }, [data.students, activeFamily]);
 
+  // Active student state
   const [activeStudentId, setActiveStudentId] = useState<string>(() => {
     return visibleStudents[0]?.id || data.students[0]?.id || '';
   });
 
+  // Ensure activeStudentId is valid whenever visibleStudents changes
   useEffect(() => {
     if (!visibleStudents.some((s) => s.id === activeStudentId)) {
       if (visibleStudents[0]) {
@@ -171,6 +191,7 @@ export default function App() {
     return data.students.find((s) => s.id === activeStudentId) || data.students[0] || null;
   }, [data.students, activeStudentId]);
 
+  // Navigation from Portal to specific family & student
   const handleSelectFamilyAndStudent = (familyId: string, studentId?: string) => {
     setActiveFamilyId(familyId);
     if (studentId) {
@@ -191,6 +212,7 @@ export default function App() {
     }
   };
 
+  // Return to Main Portal
   const handleOpenPortal = () => {
     setCurrentView('portal');
     try {
@@ -202,6 +224,7 @@ export default function App() {
     }
   };
 
+  // Monthly Navigation State
   const now = new Date();
   const [selectedYearMonth, setSelectedYearMonth] = useState<{ year: number; month: number }>(() => ({
     year: now.getFullYear(),
@@ -222,6 +245,7 @@ export default function App() {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   }, [selectedYearMonth]);
 
+  // Month navigation actions
   const handlePrevMonth = () => {
     setSelectedYearMonth((prev) => {
       if (prev.month === 1) {
@@ -245,6 +269,10 @@ export default function App() {
     setSelectedYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
   };
 
+  // Filter entries for the active student in the selected month
+  // Per user requirement: When a new month begins with day 1, any days from the previous month
+  // that belong to this opening week are transferred and displayed in the current month from the week's start,
+  // so that the entire week is evaluated together with its weekly star band appearing right below it.
   const monthEntries = useMemo(() => {
     if (!activeStudent?.entries) return [];
 
@@ -259,10 +287,15 @@ export default function App() {
       const weekBounds = getWeekBounds(parseLocalDate(e.date));
       const weekEndMonthPrefix = weekBounds.endStr.slice(0, 7);
 
+      // 1. If the week concludes (on Thursday) in this selected month, all days of this week
+      // (including those starting in the previous month) belong to this month's view!
       if (weekEndMonthPrefix === selectedMonthPrefix) {
         return true;
       }
 
+      // 2. If the entry's calendar date is in this selected month, but its week concludes in the next month:
+      // - If the next month has NOT started yet, keep it in the current view so ongoing sessions can be graded.
+      // - Once the next month starts, that week is transferred to the new month as requested.
       if (e.date.startsWith(selectedMonthPrefix) && !nextMonthHasStarted) {
         return true;
       }
@@ -270,12 +303,14 @@ export default function App() {
       return false;
     });
 
+    // Sort ASCENDING (first day of month to last)
     return filtered.sort((a, b) => {
       if (a.date === b.date) return (a.id || '').localeCompare(b.id || '');
       return a.date.localeCompare(b.date);
     });
   }, [activeStudent, selectedMonthPrefix, selectedYearMonth]);
 
+  // Find the single most recent entry that still has ANY ungraded portion
   const mostRecentUngradedEntryId = useMemo(() => {
     if (!activeStudent) return null;
     const sortedAllDesc = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
@@ -283,6 +318,7 @@ export default function App() {
     return found ? found.id : null;
   }, [activeStudent]);
 
+  // Single most-recent entry currently in this month's view
   const singleMostRecentInViewId = useMemo(() => {
     if (monthEntries.length > 0) {
       return monthEntries[monthEntries.length - 1].id;
@@ -290,6 +326,7 @@ export default function App() {
     return null;
   }, [monthEntries]);
 
+  // Scroll listener for header auto-hide/show
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const currentY = scrollContainerRef.current.scrollTop;
@@ -306,8 +343,8 @@ export default function App() {
     lastScrollYRef.current = currentY;
   };
 
-  // 1. تحديث الواجب وإرساله لـ Supabase
-  const handleUpdateEntry = async (updated: Entry) => {
+  // Entry mutation handlers
+  const handleUpdateEntry = (updated: Entry) => {
     if (!activeStudent) return;
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
@@ -320,23 +357,14 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    try {
-      await supabase.from('quran_records').insert([
-        {
-          student_id: activeStudent.id,
-          surah_name: updated.hifzText || updated.murajaaText || 'تسميع',
-          from_verse: 1,
-          to_verse: 1,
-          rating: String(updated.hifzGrade ?? updated.murajaaGrade ?? '100'),
-          created_at: new Date(updated.date).toISOString(),
-        },
-      ]);
-    } catch (err) {
-      console.error('خطأ في إرسال التعديل لـ Supabase:', err);
+    if (isSupabaseConfigured()) {
+      upsertEntryInSupabase(activeStudent.id, updated).catch((err) =>
+        console.error('Failed to sync updated entry to Supabase:', err)
+      );
     }
   };
 
-  const handleDeleteEntry = async (entryId: string) => {
+  const handleDeleteEntry = (entryId: string) => {
     if (!activeStudent) return;
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
@@ -348,10 +376,15 @@ export default function App() {
       });
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      deleteEntryInSupabase(entryId).catch((err) =>
+        console.error('Failed to delete entry from Supabase:', err)
+      );
+    }
   };
 
-  // 2. تكرار الواجب وإرساله كسطر جديد لـ Supabase
-  const handleDuplicateEntry = async (entry: Entry) => {
+  const handleDuplicateEntry = (entry: Entry) => {
     if (!activeStudent) return;
     const attendanceSchedule =
       activeStudent.attendanceDays && activeStudent.attendanceDays.length > 0
@@ -363,9 +396,9 @@ export default function App() {
       id: `entry-${Date.now()}`,
       date: nextDate,
       hifzText: entry.hifzText,
-      hifzGrade: null,
+      hifzGrade: null, // Ungraded
       murajaaText: entry.murajaaText,
-      murajaaGrade: null,
+      murajaaGrade: null, // Ungraded
     };
 
     setData((prev) => {
@@ -379,32 +412,24 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    try {
-      await supabase.from('quran_records').insert([
-        {
-          student_id: activeStudent.id,
-          surah_name: entry.hifzText || entry.murajaaText || 'تسميع مكرر',
-          from_verse: 1,
-          to_verse: 1,
-          rating: 'لم يقيم بعد',
-          created_at: new Date(nextDate).toISOString(),
-        },
-      ]);
-    } catch (err) {
-      console.error('خطأ في إرسال الواجب المكرر لـ Supabase:', err);
+    if (isSupabaseConfigured()) {
+      upsertEntryInSupabase(activeStudent.id, newEntry).catch((err) =>
+        console.error('Failed to save duplicated entry to Supabase:', err)
+      );
     }
 
     const [y, m] = nextDate.split('-').map(Number);
     setSelectedYearMonth({ year: y, month: m });
   };
 
+  // Find the most recent entry of the current active student (for repeating last homework)
   const mostRecentStudentEntry = useMemo(() => {
     if (!activeStudent?.entries || activeStudent.entries.length === 0) return null;
     return [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
   }, [activeStudent]);
 
-  // 3. إضافة واجب جديد وإرساله كسطر جديد لـ Supabase
-  const handleRepeatLastHomework = async (last: Entry | null) => {
+  // Handle repeating the last homework directly using the student's individual scheduled attendance days
+  const handleRepeatLastHomework = (last: Entry | null) => {
     if (!activeStudent) return;
     const todayStr = formatLocalDate(new Date());
     const attendanceSchedule =
@@ -435,58 +460,69 @@ export default function App() {
       return { ...prev, students: updatedStudents };
     });
 
-    try {
-      await supabase.from('quran_records').insert([
-        {
-          student_id: activeStudent.id,
-          surah_name: last?.hifzText || last?.murajaaText || 'واجب جديد',
-          from_verse: 1,
-          to_verse: 1,
-          rating: '100',
-          created_at: new Date(targetDate).toISOString(),
-        },
-      ]);
-    } catch (err) {
-      console.error('خطأ في حفظ الواجب في Supabase:', err);
+    if (isSupabaseConfigured()) {
+      upsertEntryInSupabase(activeStudent.id, newEntry).catch((err) =>
+        console.error('Failed to save repeated entry to Supabase:', err)
+      );
     }
 
     const [y, m] = targetDate.split('-').map(Number);
     setSelectedYearMonth({ year: y, month: m });
   };
 
+  // Surah Memorization Status Update Handler
   const handleUpdateSurahStatus = (surahNumber: number, status: SurahMemorizationStatus) => {
     if (!activeStudent) return;
+    const updatedRatings = {
+      ...(activeStudent.surahRatings || {}),
+      [surahNumber]: status,
+    };
+
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
         return {
           ...s,
-          surahRatings: {
-            ...(s.surahRatings || {}),
-            [surahNumber]: status,
-          },
+          surahRatings: updatedRatings,
         };
       });
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      updateStudentSurahRatingsInSupabase(activeStudent.id, updatedRatings).catch((err) =>
+        console.error('Failed to update surah status in Supabase:', err)
+      );
+    }
   };
 
+  // Direct Surah Memorization update for any selected student modal
   const handleModalUpdateSurahStatus = (studentId: string, surahNumber: number, status: SurahMemorizationStatus) => {
+    const targetStudent = data.students.find((s) => s.id === studentId);
+    const updatedRatings = {
+      ...(targetStudent?.surahRatings || {}),
+      [surahNumber]: status,
+    };
+
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== studentId) return s;
         return {
           ...s,
-          surahRatings: {
-            ...(s.surahRatings || {}),
-            [surahNumber]: status,
-          },
+          surahRatings: updatedRatings,
         };
       });
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      updateStudentSurahRatingsInSupabase(studentId, updatedRatings).catch((err) =>
+        console.error('Failed to update modal surah status in Supabase:', err)
+      );
+    }
   };
 
+  // Student Tilawa Surah & Ayah update handler
   const handleUpdateStudentTilawa = (studentId: string, surahNumber: number, ayahNumber: number) => {
     setData((prev) => {
       const updatedStudents = prev.students.map((s) =>
@@ -494,8 +530,15 @@ export default function App() {
       );
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      updateStudentTilawaInSupabase(studentId, surahNumber, ayahNumber).catch((err) =>
+        console.error('Failed to update student tilawa in Supabase:', err)
+      );
+    }
   };
 
+  // Individual Student Attendance Schedule Save Handler
   const handleSaveStudentAttendance = (studentId: string, days: number[]) => {
     setData((prev) => {
       const updatedStudents = prev.students.map((s) =>
@@ -503,6 +546,12 @@ export default function App() {
       );
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      updateStudentAttendanceInSupabase(studentId, days).catch((err) =>
+        console.error('Failed to update student attendance in Supabase:', err)
+      );
+    }
   };
 
   const handleSaveAllStudentsAttendance = (updates: Record<string, number[]>) => {
@@ -515,6 +564,43 @@ export default function App() {
       });
       return { ...prev, students: updatedStudents };
     });
+
+    if (isSupabaseConfigured()) {
+      Object.entries(updates).forEach(([stId, days]) => {
+        updateStudentAttendanceInSupabase(stId, days).catch((err) =>
+          console.error(`Failed to update attendance for ${stId} in Supabase:`, err)
+        );
+      });
+    }
+  };
+
+  // Legacy/Family Attendance Schedule Save Handler (keeps students in sync if called)
+  const handleSaveFamilyAttendance = (familyId: string, days: number[]) => {
+    setData((prev) => {
+      const updatedFamilies = prev.families.map((f) =>
+        f.id === familyId ? { ...f, attendanceDays: days } : f
+      );
+      const targetFam = prev.families.find((f) => f.id === familyId);
+      const updatedStudents = prev.students.map((s) => {
+        if (targetFam?.studentIds.includes(s.id)) {
+          return { ...s, attendanceDays: days };
+        }
+        return s;
+      });
+      return { ...prev, families: updatedFamilies, students: updatedStudents };
+    });
+
+    if (isSupabaseConfigured()) {
+      updateFamilyAttendanceInSupabase(familyId, days).catch((err) =>
+        console.error('Failed to update family attendance in Supabase:', err)
+      );
+      const targetFam = data.families.find((f) => f.id === familyId);
+      targetFam?.studentIds.forEach((stId) => {
+        updateStudentAttendanceInSupabase(stId, days).catch((err) =>
+          console.error(`Failed to update attendance for student ${stId} in Supabase:`, err)
+        );
+      });
+    }
   };
 
   const handleResetData = () => {
@@ -524,6 +610,7 @@ export default function App() {
     handleGoToCurrentMonth();
   };
 
+  // If in portal view, render the 3-Family Master Portal
   if (currentView === 'portal') {
     return (
       <MainPortal
@@ -547,6 +634,7 @@ export default function App() {
         backgroundImage: `radial-gradient(circle at 10% 20%, rgba(184, 134, 11, 0.04) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(14, 92, 86, 0.05) 0%, transparent 40%)`,
       }}
     >
+      {/* Auto-hiding Header */}
       <Header
         isTeacherMode={isTeacherMode}
         activeFamily={activeFamily}
@@ -561,6 +649,7 @@ export default function App() {
         onTeacherLoginSuccess={handleTeacherLoginSuccess}
       />
 
+      {/* Main Content Area */}
       <main
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -568,6 +657,7 @@ export default function App() {
         className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-16 sm:pb-20 px-1.5 sm:px-4 md:px-6"
       >
         <div className="w-full max-w-3xl sm:max-w-4xl mx-auto flex flex-col items-stretch space-y-2.5">
+          {/* Month Navigator Bar */}
           <MonthNavigator
             isCurrent={isCurrentMonth}
             monthLabel={selectedMonthLabel}
@@ -576,6 +666,7 @@ export default function App() {
             onGoToCurrentMonth={handleGoToCurrentMonth}
           />
 
+          {/* List of Homework Entries for the selected month */}
           <div id="homework-list" className="space-y-1.5 pt-0.5">
             {monthEntries.length === 0 ? (
               <div
@@ -589,18 +680,24 @@ export default function App() {
               </div>
             ) : (
               monthEntries.map((entry, idx) => {
+                // Calculate week bounds for this entry
                 const weekBounds = getWeekBounds(parseLocalDate(entry.date));
                 const weekEndThursday = weekBounds.endStr;
                 const nextSaturdayStr = addDays(weekEndThursday, 2);
 
+                // Check if the week concludes in the currently viewed month
+                // Per user requirement: If the month ends before the week ends, do not put evaluation at the end of the incomplete month,
+                // evaluate in the next month upon the week's completion for the whole week.
                 const weekEndMonthPrefix = weekEndThursday.slice(0, 7);
                 const isWeekEndingInCurrentMonth = weekEndMonthPrefix === selectedMonthPrefix;
 
+                // Is this entry the last entry of its week in this month's view?
                 const nextEntry = monthEntries[idx + 1];
                 const isLastEntryOfWeekInMonth =
                   !nextEntry ||
                   getWeekBounds(parseLocalDate(nextEntry.date)).endStr !== weekEndThursday;
 
+                // Star band only appears when the week is completed (has subsequent entry on/after next Saturday)
                 const hasSubsequentSaturdayEntry = Boolean(
                   activeStudent?.entries?.some((e) => e.date >= nextSaturdayStr)
                 );
@@ -636,6 +733,7 @@ export default function App() {
                       onUpdateSurahStatus={handleUpdateSurahStatus}
                     />
 
+                    {/* Weekly Star Band */}
                     {shouldShowStarBand && weekRating !== null && (
                       <WeeklyStarBand
                         key={`week-stars-${weekEndThursday}`}
@@ -648,6 +746,7 @@ export default function App() {
               })
             )}
 
+            {/* Teacher Mode: Single "Repeat +" Button as requested */}
             {isTeacherMode && (
               <AddHomeworkRow
                 lastEntry={mostRecentStudentEntry}
@@ -658,12 +757,14 @@ export default function App() {
         </div>
       </main>
 
+      {/* Fixed Compact Bottom Student Switcher */}
       <StudentSwitcher
         students={visibleStudents}
         activeStudentId={activeStudentId}
         onSelectStudent={setActiveStudentId}
       />
 
+      {/* Slide-out Sidebar Drawer dedicated to Current Student */}
       <StudentSidebarDrawer
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -677,6 +778,7 @@ export default function App() {
         onOpenPortal={handleOpenPortal}
       />
 
+      {/* Student Attendance Settings Modal (Teacher Mode) */}
       {activeFamily && (
         <StudentAttendanceModal
           isOpen={isFamilyAttendanceOpen}
@@ -692,6 +794,7 @@ export default function App() {
         />
       )}
 
+      {/* Student Surah Memorization Tracker Modal */}
       {selectedSurahStudent && (
         <SurahProgressModal
           isOpen={Boolean(selectedSurahStudent)}
@@ -700,6 +803,7 @@ export default function App() {
           isTeacherMode={isTeacherMode}
           onUpdateSurahStatus={(surahNumber, status) => {
             handleModalUpdateSurahStatus(selectedSurahStudent.id, surahNumber, status);
+            // Also keep local state updated
             setSelectedSurahStudent((prev) =>
               prev
                 ? {
@@ -715,7 +819,8 @@ export default function App() {
         />
       )}
 
-      <OfflineIndicator />
+      {/* Global Compact Offline & Supabase Status Indicator */}
+      <OfflineIndicator isSupabaseConnected={isSupabaseConnected} />
     </div>
   );
 }
