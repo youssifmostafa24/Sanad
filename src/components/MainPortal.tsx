@@ -101,9 +101,9 @@ export const MainPortal: React.FC<MainPortalProps> = ({
       </header>
 
       {/* Main Content Area - 2 Columns on Desktop */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-2.5 sm:px-6 py-3.5 sm:py-6 space-y-3 sm:space-y-4">
         {/* 2-Column Responsive Grid on Desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4" id="families-slides-container">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4" id="families-slides-container">
           {families.map((fam) => {
             const famStudents = students.filter((st) => fam.studentIds.includes(st.id));
 
@@ -111,10 +111,10 @@ export const MainPortal: React.FC<MainPortalProps> = ({
               <div
                 key={fam.id}
                 id={`family-slide-${fam.id}`}
-                className="bg-white rounded-2xl border border-[#B8860B]/25 hover:border-[#0E5C56]/50 transition-all duration-150 shadow-2xs hover:shadow-xs p-3 sm:p-4 flex flex-col justify-center"
+                className="bg-white rounded-2xl border border-[#B8860B]/25 hover:border-[#0E5C56]/50 transition-all duration-150 shadow-2xs hover:shadow-xs p-2 sm:p-4 flex flex-col justify-center"
               >
-                {/* Slide Content: Students Icons & Chips only */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
+                {/* Slide Content: 3 columns to fit 3 students side-by-side even in narrow spaces */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
                   {famStudents.map((student) => {
                     return (
                       <button
@@ -122,20 +122,20 @@ export const MainPortal: React.FC<MainPortalProps> = ({
                         id={`portal-student-${student.id}`}
                         type="button"
                         onClick={() => onSelectFamilyAndStudent(fam.id, student.id)}
-                        className="flex items-center gap-2 p-2 sm:p-2.5 rounded-xl bg-[#FAF6EE]/70 hover:bg-[#FBF6E8] border border-[#B8860B]/20 hover:border-[#0E5C56] transition-all text-right cursor-pointer group/st active:scale-98 shadow-2xs hover:shadow-xs"
+                        className="flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2.5 rounded-xl bg-[#FAF6EE]/70 hover:bg-[#FBF6E8] border border-[#B8860B]/20 hover:border-[#0E5C56] transition-all text-right cursor-pointer group/st active:scale-98 shadow-2xs hover:shadow-xs min-w-0"
                       >
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-2xs shrink-0"
+                          className="w-6.5 h-6.5 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white font-bold text-[11px] sm:text-xs shadow-2xs shrink-0"
                           style={{ backgroundColor: student.color || '#0E5C56' }}
                         >
                           {student.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className="font-bold text-xs sm:text-[13px] text-[#1F2A3D] group-hover/st:text-[#0E5C56] transition-colors truncate block">
+                          <span className="font-bold text-[11px] sm:text-[13px] text-[#1F2A3D] group-hover/st:text-[#0E5C56] transition-colors truncate block leading-tight">
                             {student.name}
                           </span>
                           {student.arabicName && (
-                            <span className="text-[10px] text-[#5B6478] font-serif block truncate">
+                            <span className="text-[9px] sm:text-[10px] text-[#5B6478] font-serif block truncate leading-tight mt-0.5">
                               {student.arabicName}
                             </span>
                           )}

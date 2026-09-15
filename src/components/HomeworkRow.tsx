@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BookOpen } from 'lucide-react';
 import { Entry, GradeValue, SurahMemorizationStatus } from '../types';
 import { getWeekdayShort, getDayOfMonth, parseLocalDate } from '../utils/dateUtils';
 import { GradeBadge } from './GradeBadge';
@@ -88,7 +89,9 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   return (
     <div
       id={`entry-row-${entry.id}`}
-      className="flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-150"
+      className={`flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-150 ${
+        !isTeacherMode && isSingleMostRecentInView ? 'mb-4 sm:mb-4.5' : ''
+      }`}
     >
       {/* Left Card: Date, compact, bold weekday, editable date in Teacher mode */}
       <div
@@ -157,19 +160,12 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
       {/* Right Card: Day's homework portions */}
       <div
         id={`content-card-${entry.id}`}
-        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1.5 px-2.5 sm:py-2 sm:px-3 flex flex-col justify-center relative overflow-hidden transition-colors ${cardBorder}`}
+        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1.5 px-2.5 sm:py-2 sm:px-3 flex flex-col justify-center relative transition-colors ${cardBorder}`}
       >
-        {/* "New home work" pill: Top-Center, hidden when tight or on mobile overflow */}
-        {isMostRecentUngraded && (
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 px-2 py-0.2 bg-[#0E5C56] text-[#F1E7CE] text-[8px] sm:text-[8.5px] font-bold uppercase rounded-b-md shadow-2xs z-10 pointer-events-none max-w-[110px] truncate hidden sm:inline-block">
-            New home work
-          </div>
-        )}
-
         {/* Portion 1: Hifz Homework */}
         <div
           id={`hifz-row-${entry.id}`}
-          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[30px]"
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[32px] md:min-h-[36px]"
         >
           <div className="flex-1 min-w-0 overflow-hidden">
             {isTeacherMode ? (
@@ -177,24 +173,24 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 id={`hifz-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('hifz')}
-                className="w-full h-[28px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-xl py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
-                title="اضغط لاختيار السورة والآيات"
+                className="w-full text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                title="اضغط لتعديل السورة والآيات"
               >
                 {parsedHifz ? (
                   <>
                     <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedHifz.ayahRange}
                     </span>
-                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                       {parsedHifz.surahName}
                     </span>
                   </>
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
-                  <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
+                  <span className="text-[#5B6478] italic font-normal text-xs sm:text-sm hover:text-[#0E5C56]">اضغط لاختيار السورة...</span>
                 )}
               </button>
             ) : (
@@ -204,12 +200,12 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedHifz.ayahRange}
                     </span>
-                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                       {parsedHifz.surahName}
                     </span>
                   </>
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -238,7 +234,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         {/* Portion 2: Murajaa Homework */}
         <div
           id={`murajaa-row-${entry.id}`}
-          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[30px]"
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[32px] md:min-h-[36px]"
         >
           <div className="flex-1 min-w-0 overflow-hidden">
             {isTeacherMode ? (
@@ -246,24 +242,24 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 id={`murajaa-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('murajaa')}
-                className="w-full h-[28px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-xl py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
-                title="اضغط لاختيار السورة والآيات"
+                className="w-full text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                title="اضغط لتعديل السورة والآيات"
               >
                 {parsedMurajaa ? (
                   <>
                     <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedMurajaa.ayahRange}
                     </span>
-                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                       {parsedMurajaa.surahName}
                     </span>
                   </>
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
-                  <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
+                  <span className="text-[#5B6478] italic font-normal text-xs sm:text-sm hover:text-[#0E5C56]">اضغط لاختيار السورة...</span>
                 )}
               </button>
             ) : (
@@ -273,12 +269,12 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedMurajaa.ayahRange}
                     </span>
-                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                       {parsedMurajaa.surahName}
                     </span>
                   </>
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -297,6 +293,19 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
             />
           </div>
         </div>
+
+        {/* Student Mode: Attached "Your homework" badge below the latest homework card */}
+        {!isTeacherMode && isSingleMostRecentInView && (
+          <div
+            id={`your-homework-badge-${entry.id}`}
+            className="absolute -bottom-3 sm:-bottom-3.5 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+          >
+            <div className="inline-flex items-center gap-1 sm:gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-0.5 bg-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-[13px] font-bold tracking-wide shadow-md border border-[#F5EFDD]/30 whitespace-nowrap">
+              <BookOpen className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
+              <span className="font-sans leading-tight select-none">Your homework</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* On Time Slot: Separate card on the right for student Yusuf, matching date badge layout */}

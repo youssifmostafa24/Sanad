@@ -26,7 +26,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
             const val = e.target.value;
             onChange(val === '' ? null : (Number(val) as GradeValue));
           }}
-          className={`h-[22px] sm:h-[26px] md:h-[30px] text-[10px] sm:text-[11px] md:text-xs font-bold pl-1.5 sm:pl-2.5 md:pl-3 pr-4 sm:pr-5 md:pr-6 text-left rounded-full transition-all cursor-pointer outline-none border focus:ring-1 focus:ring-[#B8860B]/40 appearance-none shadow-2xs ${
+          className={`h-[26px] sm:h-[30px] md:h-[34px] text-xs sm:text-[13px] md:text-sm font-bold pl-2 sm:pl-3 md:pl-3.5 pr-5 sm:pr-6 md:pr-7 text-left rounded-full transition-all cursor-pointer outline-none border focus:ring-1 focus:ring-[#B8860B]/40 appearance-none shadow-2xs ${
             grade === null
               ? 'bg-[#F4F5F7] text-[#5B6478] border-gray-200'
               : grade === 100
@@ -42,8 +42,8 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%235B6478'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
             backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 0.25rem center',
-            backgroundSize: '0.65em',
+            backgroundPosition: 'right 0.35rem center',
+            backgroundSize: '0.7em',
           }}
         >
           <option value="">—</option>
@@ -63,7 +63,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
       <span
         id={`${idPrefix}-pending`}
         dir="ltr"
-        className={`h-[22px] sm:h-[26px] md:h-[30px] px-2 sm:px-2.5 md:px-3.5 shrink-0 inline-flex items-center justify-center rounded-full bg-[#F4F5F7] text-[#5B6478] border border-gray-200 text-[10px] sm:text-[11px] md:text-xs font-bold select-none whitespace-nowrap ${className}`}
+        className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-4 shrink-0 inline-flex items-center justify-center rounded-full bg-[#F4F5F7] text-[#5B6478] border border-gray-200 text-xs sm:text-[13px] md:text-sm font-bold select-none whitespace-nowrap ${className}`}
         title="قيد الانتظار"
       >
         —
@@ -123,9 +123,9 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
       id={`${idPrefix}-val`}
       dir="ltr"
       title={String(style.score)}
-      className={`h-[22px] sm:h-[26px] md:h-[30px] px-1.5 sm:px-2.5 md:px-3.5 shrink-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-full text-[10px] sm:text-[11px] md:text-xs font-bold ${style.bg} ${style.text} border ${style.border} shadow-2xs whitespace-nowrap select-none ${className}`}
+      className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-4 shrink-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-full text-xs sm:text-[13px] md:text-sm font-bold ${style.bg} ${style.text} border ${style.border} shadow-2xs whitespace-nowrap select-none ${className}`}
     >
-      <span className="text-[9px] sm:text-[10px] md:text-[11px] leading-none">{style.icon}</span>
+      <span className="text-[10px] sm:text-[11.5px] md:text-xs leading-none">{style.icon}</span>
       <span className="tabular-nums font-sans leading-none">{style.score}</span>
     </span>
   );

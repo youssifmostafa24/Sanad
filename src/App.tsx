@@ -326,6 +326,67 @@ export default function App() {
     return null;
   }, [monthEntries]);
 
+  // Selected entry from the MonthNavigator timeline
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+
+  const currentActiveEntryId = useMemo(() => {
+    if (selectedEntryId && monthEntries.some((e) => e.id === selectedEntryId)) {
+      return selectedEntryId;
+    }
+    return singleMostRecentInViewId;
+  }, [selectedEntryId, monthEntries, singleMostRecentInViewId]);
+
+  const handleSelectEntryFromNav = (entryId: string) => {
+    setSelectedEntryId(entryId);
+    const el = document.getElementById(`entry-row-${entryId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Ref to target the latest homework entry in view
+  const latestHomeworkRef = useRef<HTMLDivElement | null>(null);
+
+  // Whenever the active student changes, automatically set the selected month to the month of the student's latest homework
+  useEffect(() => {
+    if (activeStudent?.entries && activeStudent.entries.length > 0) {
+      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+      const latest = sorted[0];
+      if (latest) {
+        const [y, m] = latest.date.split('-').map(Number);
+        if (y && m) {
+          setSelectedYearMonth((prev) => {
+            if (prev.year !== y || prev.month !== m) {
+              return { year: y, month: m };
+            }
+            return prev;
+          });
+        }
+      }
+    }
+  }, [activeStudentId]);
+
+  // Auto-scroll directly to the latest homework entry so the student never needs to scroll manually
+  useEffect(() => {
+    if (currentView !== 'family') return;
+
+    const scrollTimer = setTimeout(() => {
+      if (latestHomeworkRef.current) {
+        latestHomeworkRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      } else if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
+    }, 120);
+
+    return () => clearTimeout(scrollTimer);
+  }, [activeStudentId, selectedYearMonth.year, selectedYearMonth.month, currentView, monthEntries.length]);
+
   // Scroll listener for header auto-hide/show
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -664,6 +725,9 @@ export default function App() {
             onPrevMonth={handlePrevMonth}
             onNextMonth={handleNextMonth}
             onGoToCurrentMonth={handleGoToCurrentMonth}
+            entries={monthEntries}
+            activeEntryId={currentActiveEntryId}
+            onSelectEntry={handleSelectEntryFromNav}
           />
 
           {/* List of Homework Entries for the selected month */}
@@ -722,7 +786,11 @@ export default function App() {
                       : null;
 
                   return (
-                    <React.Fragment key={`entry-group-${entry.id}`}>
+                    <div
+                      key={`entry-group-${entry.id}`}
+                      ref={entry.id === singleMostRecentInViewId ? latestHomeworkRef : undefined}
+                      className="w-full"
+                    >
                       <HomeworkRow
                         key={`month-entry-${entry.id}`}
                         entry={entry}
@@ -746,7 +814,7 @@ export default function App() {
                           idPrefix={`week-stars-${weekEndThursday}`}
                         />
                       )}
-                    </React.Fragment>
+                    </div>
                   );
                 });
               })()
