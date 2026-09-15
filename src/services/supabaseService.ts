@@ -11,6 +11,7 @@ export interface SupabaseHomeworkRow {
   hifz_grade: number | null;
   murajaa_text: string | null;
   murajaa_grade: number | null;
+  on_time_score?: number | null;
   created_at?: string;
 }
 
@@ -99,6 +100,7 @@ export async function fetchAllDataFromSupabase(): Promise<{
         hifzGrade: row.hifz_grade as GradeValue | null,
         murajaaText: normalizeQuranHomeworkText(row.murajaa_text || ''),
         murajaaGrade: row.murajaa_grade as GradeValue | null,
+        onTimeScore: row.on_time_score ?? null,
       });
     });
 
@@ -199,14 +201,24 @@ export async function seedInitialDataToSupabase(): Promise<boolean> {
           hifz_grade: e.hifzGrade,
           murajaa_text: e.murajaaText,
           murajaa_grade: e.murajaaGrade,
+          on_time_score: e.onTimeScore ?? null,
         });
       });
     });
 
     if (entriesToInsert.length > 0) {
-      const { error: entriesErr } = await client
+      let { error: entriesErr } = await client
         .from('homework_entries')
         .upsert(entriesToInsert, { onConflict: 'id' });
+
+      // If on_time_score column does not exist yet, fallback gracefully
+      if (entriesErr && entriesErr.message?.includes('on_time_score')) {
+        const strippedEntries = entriesToInsert.map(({ on_time_score, ...rest }) => rest);
+        const retry = await client
+          .from('homework_entries')
+          .upsert(strippedEntries, { onConflict: 'id' });
+        entriesErr = retry.error;
+      }
 
       if (entriesErr) {
         console.error('Failed to seed entries:', entriesErr);
@@ -240,9 +252,22 @@ export async function upsertEntryInSupabase(studentId: string, entry: Entry): Pr
       murajaa_grade: entry.murajaaGrade,
     };
 
-    const { error } = await client
+    if (entry.onTimeScore !== undefined) {
+      payload.on_time_score = entry.onTimeScore;
+    }
+
+    let { error } = await client
       .from('homework_entries')
       .upsert(payload, { onConflict: 'id' });
+
+    // Fallback gracefully if database does not have on_time_score column
+    if (error && error.message?.includes('on_time_score')) {
+      delete payload.on_time_score;
+      const retry = await client
+        .from('homework_entries')
+        .upsert(payload, { onConflict: 'id' });
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Supabase upsert entry error:', error.message);

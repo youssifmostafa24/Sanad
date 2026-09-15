@@ -58,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
         onEnterTeacherMode();
       }
     } else {
-      setErrorMsg('كلمة المرور غير صحيحة (تأكد من إدخال ١٢٢٣٣٣)');
+      setErrorMsg('كلمة المرور غير صحيحة');
       inputRef.current?.select();
     }
   };
@@ -185,7 +185,6 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="text-xs font-bold text-[#B8860B] uppercase tracking-wider">
                         {promptTarget === 'portal' ? 'القائمة الرئيسية' : 'Teacher Access'}
                       </span>
-                      <span className="text-[10px] text-[#F1E7CE]/60">Pass: ١٢٢٣٣٣</span>
                     </div>
 
                     <input
@@ -197,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
                         setPassword(e.target.value);
                         setErrorMsg('');
                       }}
-                      placeholder="أدخل الباسورد (١٢٢٣٣٣)..."
+                      placeholder="أدخل كلمة المرور..."
                       className="w-full px-3 py-1.5 text-xs bg-black/30 border border-[#B8860B]/30 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#B8860B] text-center font-mono"
                     />
 

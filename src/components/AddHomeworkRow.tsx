@@ -31,7 +31,7 @@ export const AddHomeworkRow: React.FC<AddHomeworkRowProps> = ({
             initial={{ opacity: 0, y: -6, height: 0 }}
             animate={{ opacity: 1, y: 0, height: 'auto' }}
             exit={{ opacity: 0, y: -6, height: 0 }}
-            className="mb-2 px-3 py-1.5 rounded-xl bg-[#0E5C56]/15 border border-[#0E5C56]/30 text-[#0E5C56] text-xs font-semibold flex items-center justify-between shadow-2xs"
+            className="mb-2 px-3 py-1.5 rounded-2xl bg-[#0E5C56]/15 border border-[#0E5C56]/30 text-[#0E5C56] text-xs font-semibold flex items-center justify-between shadow-2xs"
           >
             <span className="flex items-center gap-2">
               <Check className="w-4 h-4 text-[#0E5C56] shrink-0 stroke-[2.5]" />
@@ -55,7 +55,7 @@ export const AddHomeworkRow: React.FC<AddHomeworkRowProps> = ({
         onClick={handleRepeatClick}
         dir="rtl"
         title="إضافة وتكرار الواجب تلقائياً في يوم الحضور التالي"
-        className="w-full py-2 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#FBF6E8] hover:bg-[#F3EAD3] text-[#0E5C56] border border-[#B8860B]/35 flex items-center justify-center gap-2 shadow-2xs transition-all active:scale-[0.99] cursor-pointer"
+        className="w-full py-2.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-white hover:bg-[#F6ECD2] text-[#0E5C56] flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
       >
         <RotateCcw className="w-4 h-4 text-[#0E5C56] shrink-0" />
         <Plus className="w-4 h-4 text-[#0E5C56] shrink-0" />

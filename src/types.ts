@@ -15,6 +15,7 @@ export interface Entry {
   hifzGrade: GradeValue | null;
   murajaaText: string;
   murajaaGrade: GradeValue | null;
+  onTimeScore?: number | null; // Evaluation for lesson entry punctuality (60-100)
 }
 
 export interface ManualWeeklyStars {
@@ -27,6 +28,7 @@ export interface Student {
   name: string;
   arabicName?: string;
   color: string; // hex, used as avatar/accent
+  photoUrl?: string;
   entries: Entry[];
   manualWeeklyStars?: ManualWeeklyStars[];
   surahRatings?: Record<number, SurahMemorizationStatus>; // Surah number (1-114) -> status

@@ -18,11 +18,11 @@ export const StudentSwitcher: React.FC<StudentSwitcherProps> = ({
     <footer
       id="student-bottom-switcher"
       aria-label="Student Selection"
-      className="fixed bottom-0 left-0 right-0 z-30 bg-[#F1E7CE] flex flex-col items-center justify-center border-t border-[#B8860B]/20 shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+      className="fixed bottom-0 left-0 right-0 z-30 bg-[#F5EFDD] flex items-center justify-center border-t border-[#B8860B]/20 shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]"
+      dir="rtl"
     >
-      {/* Student tabs with bold names */}
-      <div className="h-11 sm:h-12 w-full flex items-center justify-center px-3 sm:px-6">
-        <div className="max-w-md mx-auto flex items-center justify-center gap-2 sm:gap-3 overflow-x-auto py-0.5 px-1 no-scrollbar">
+      <div className="h-12 sm:h-13 w-full flex items-center justify-center px-4 max-w-5xl mx-auto">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 overflow-x-auto py-1 px-2 no-scrollbar w-full">
           {students.map((student) => {
             const isActive = student.id === activeStudentId;
             const displayName = student.name;
@@ -33,10 +33,10 @@ export const StudentSwitcher: React.FC<StudentSwitcherProps> = ({
                 id={`student-tab-${student.id}`}
                 type="button"
                 onClick={() => onSelectStudent(student.id)}
-                className={`px-4 sm:px-5 py-1 rounded-full text-xs sm:text-[13px] font-bold tracking-wide font-sans shrink-0 transition-all duration-150 cursor-pointer active:scale-95 select-none ${
+                className={`px-3.5 sm:px-5 py-1 sm:py-1.5 rounded-full text-xs sm:text-[13px] font-bold tracking-wide font-sans shrink-0 transition-all duration-150 cursor-pointer active:scale-95 select-none ${
                   isActive
-                    ? 'bg-[#B8860B] text-[#FBF6E8] shadow-xs scale-102'
-                    : 'bg-[#0E5C56] text-[#F1E7CE]/90 hover:text-white'
+                    ? 'bg-[#B8860B] text-[#FBF6E8] shadow-xs scale-102 ring-1 ring-[#FBF6E8]/30'
+                    : 'bg-[#0E5C56] text-[#F1E7CE]/90 hover:text-white hover:bg-[#0B4D48]'
                 }`}
               >
                 {displayName}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Entry, GradeValue, SurahMemorizationStatus } from '../types';
 import { getWeekdayShort, getDayOfMonth, parseLocalDate } from '../utils/dateUtils';
 import { GradeBadge } from './GradeBadge';
+import { OnTimeBadge } from './OnTimeBadge';
 import { QuranAyahPickerModal } from './QuranAyahPickerModal';
 import { normalizeQuranHomeworkText, parseQuranHomework, parseHomeworkDisplay } from '../data/quranSurahs';
 
@@ -12,6 +13,7 @@ interface HomeworkRowProps {
   isSingleMostRecentInView: boolean;
   selectedMonthPrefix?: string;
   studentSurahRatings?: Record<number, SurahMemorizationStatus>;
+  showOnTime?: boolean;
   onUpdateEntry: (updated: Entry) => void;
   onDeleteEntry: (entryId: string) => void;
   onDuplicateEntry: (entry: Entry) => void;
@@ -25,6 +27,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   isSingleMostRecentInView,
   selectedMonthPrefix,
   studentSurahRatings,
+  showOnTime = false,
   onUpdateEntry,
   onDeleteEntry,
   onDuplicateEntry,
@@ -35,9 +38,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   const isDifferentMonth = Boolean(selectedMonthPrefix && !entry.date.startsWith(selectedMonthPrefix));
   const monthShort = parseLocalDate(entry.date).toLocaleDateString('en-US', { month: 'short' });
 
-  const cardBorder = isMostRecentUngraded
-    ? 'bg-[#E9F8E7] border-[#0E5C56]/20'
-    : 'bg-[#FBF6E8] border-[#B8860B]/10';
+  const cardBorder = 'bg-white';
 
   const [pickerTarget, setPickerTarget] = useState<'hifz' | 'murajaa' | null>(null);
 
@@ -80,15 +81,19 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
       ? studentSurahRatings[parsedTarget.surahNumber] || 'not_memorized'
       : 'not_memorized';
 
+  const parsedHifz = parseHomeworkDisplay(entry.hifzText);
+  const cleanMurajaa = entry.murajaaText ? entry.murajaaText.replace(/^(Review|ريفيو|حفظ)\s*:\s*/i, '') : '';
+  const parsedMurajaa = parseHomeworkDisplay(cleanMurajaa);
+
   return (
     <div
       id={`entry-row-${entry.id}`}
-      className="flex items-stretch space-x-1.5 sm:space-x-2 w-full group transition-all duration-150"
+      className="flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-150"
     >
       {/* Left Card: Date, compact, bold weekday, editable date in Teacher mode */}
       <div
         id={`date-card-${entry.id}`}
-        className="relative w-10 sm:w-11 bg-[#FBF6E8] rounded-xl shadow-2xs flex flex-col items-center justify-center border border-[#B8860B]/15 shrink-0 py-1 px-0.5 text-center transition-colors select-none"
+        className="relative w-11 sm:w-12 bg-white rounded-2xl flex flex-col items-center justify-center shrink-0 py-1.5 px-0.5 text-center transition-colors select-none"
       >
         {/* Teacher Mode: Delete "✕" */}
         {isTeacherMode && (
@@ -149,10 +154,10 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         )}
       </div>
 
-      {/* Right Card: Day's two homework portions - Compact vertical thickness */}
+      {/* Right Card: Day's homework portions */}
       <div
         id={`content-card-${entry.id}`}
-        className={`flex-1 min-w-0 rounded-xl shadow-2xs py-1 px-2 sm:py-1.5 sm:px-2.5 flex flex-col justify-center border relative overflow-hidden transition-colors ${cardBorder}`}
+        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1.5 px-2.5 sm:py-2 sm:px-3 flex flex-col justify-center relative overflow-hidden transition-colors ${cardBorder}`}
       >
         {/* "New home work" pill: Top-Center, hidden when tight or on mobile overflow */}
         {isMostRecentUngraded && (
@@ -162,140 +167,147 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         )}
 
         {/* Portion 1: Hifz Homework */}
-        {(() => {
-          const parsedHifz = parseHomeworkDisplay(entry.hifzText);
-          return (
-            <div
-              id={`hifz-row-${entry.id}`}
-              className="grid grid-cols-2 gap-1.5 sm:gap-2 w-full items-center min-h-[30px]"
-            >
-              {/* Homework content: Ayah range on the left (towards date), Surah on the right of ayah range */}
-              <div className="w-full min-w-0">
-                {isTeacherMode ? (
-                  <button
-                    id={`hifz-input-${entry.id}`}
-                    type="button"
-                    onClick={() => setPickerTarget('hifz')}
-                    className="w-full h-[30px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-lg py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
-                    title="اضغط لاختيار السورة والآيات"
-                  >
-                    {parsedHifz ? (
-                      <>
-                        <span className="text-[#0E5C56] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                          {parsedHifz.ayahRange}
-                        </span>
-                        <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
-                          {parsedHifz.surahName}
-                        </span>
-                      </>
-                    ) : entry.hifzText ? (
-                      <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">{entry.hifzText}</span>
-                    ) : (
-                      <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
-                    )}
-                  </button>
+        <div
+          id={`hifz-row-${entry.id}`}
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[30px]"
+        >
+          <div className="flex-1 min-w-0 overflow-hidden">
+            {isTeacherMode ? (
+              <button
+                id={`hifz-input-${entry.id}`}
+                type="button"
+                onClick={() => setPickerTarget('hifz')}
+                className="w-full h-[28px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-xl py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
+                title="اضغط لاختيار السورة والآيات"
+              >
+                {parsedHifz ? (
+                  <>
+                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                      {parsedHifz.ayahRange}
+                    </span>
+                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                      {parsedHifz.surahName}
+                    </span>
+                  </>
+                ) : entry.hifzText ? (
+                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    {entry.hifzText.replace(/[()]/g, '').trim()}
+                  </span>
                 ) : (
-                  <div className="leading-tight flex items-center gap-1.5 flex-wrap">
-                    {parsedHifz ? (
-                      <>
-                        <span className="text-[#0E5C56] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                          {parsedHifz.ayahRange}
-                        </span>
-                        <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg">
-                          {parsedHifz.surahName}
-                        </span>
-                      </>
-                    ) : entry.hifzText ? (
-                      <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg break-words">{entry.hifzText}</span>
-                    ) : (
-                      <span className="text-[#5B6478] italic text-xs font-normal">None assigned</span>
-                    )}
-                  </div>
+                  <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
+                )}
+              </button>
+            ) : (
+              <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
+                {parsedHifz ? (
+                  <>
+                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                      {parsedHifz.ayahRange}
+                    </span>
+                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                      {parsedHifz.surahName}
+                    </span>
+                  </>
+                ) : entry.hifzText ? (
+                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    {entry.hifzText.replace(/[()]/g, '').trim()}
+                  </span>
+                ) : (
+                  <span className="text-[#5B6478] italic text-xs font-normal">None assigned</span>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* GradeBadge: directly beside the homework, parallel and identical in width */}
-              <div className="w-full min-w-0 flex items-center justify-end">
-                <GradeBadge
-                  grade={entry.hifzGrade}
-                  editable={isTeacherMode}
-                  onChange={handleHifzGradeChange}
-                  idPrefix={`hifz-${entry.id}`}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          );
-        })()}
+          <div className="shrink-0 flex items-center justify-end">
+            <GradeBadge
+              grade={entry.hifzGrade}
+              editable={isTeacherMode}
+              onChange={handleHifzGradeChange}
+              idPrefix={`hifz-${entry.id}`}
+            />
+          </div>
+        </div>
 
-        {/* Portion 2: Murajaa Homework (no divider between portions) */}
-        {(() => {
-          const cleanMurajaa = entry.murajaaText ? entry.murajaaText.replace(/^(Review|ريفيو|حفظ)\s*:\s*/i, '') : '';
-          const parsedMurajaa = parseHomeworkDisplay(cleanMurajaa);
-          return (
-            <div
-              id={`murajaa-row-${entry.id}`}
-              className="grid grid-cols-2 gap-1.5 sm:gap-2 w-full items-center min-h-[30px] mt-1 sm:mt-1.5"
-            >
-              {/* Homework content: Ayah range on the left (towards date), Surah on the right of ayah range */}
-              <div className="w-full min-w-0">
-                {isTeacherMode ? (
-                  <button
-                    id={`murajaa-input-${entry.id}`}
-                    type="button"
-                    onClick={() => setPickerTarget('murajaa')}
-                    className="w-full h-[30px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-lg py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
-                    title="اضغط لاختيار السورة والآيات"
-                  >
-                    {parsedMurajaa ? (
-                      <>
-                        <span className="text-[#0E5C56] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                          {parsedMurajaa.ayahRange}
-                        </span>
-                        <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
-                          {parsedMurajaa.surahName}
-                        </span>
-                      </>
-                    ) : cleanMurajaa ? (
-                      <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">{cleanMurajaa}</span>
-                    ) : (
-                      <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
-                    )}
-                  </button>
+        {/* Dashed line separating homework 1 and homework 2 without increasing slide width */}
+        <div
+          className="w-full border-t border-dashed border-[#B8860B]/20 sm:border-[#B8860B]/25 my-1 sm:my-1.5 shrink-0 pointer-events-none"
+          aria-hidden="true"
+        />
+
+        {/* Portion 2: Murajaa Homework */}
+        <div
+          id={`murajaa-row-${entry.id}`}
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[30px]"
+        >
+          <div className="flex-1 min-w-0 overflow-hidden">
+            {isTeacherMode ? (
+              <button
+                id={`murajaa-input-${entry.id}`}
+                type="button"
+                onClick={() => setPickerTarget('murajaa')}
+                className="w-full h-[28px] text-[#1F2A3D] bg-transparent border border-[#B8860B]/30 hover:border-[#0E5C56]/40 rounded-xl py-0.5 px-2 leading-tight focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate flex items-center justify-start gap-1.5 transition-colors text-left"
+                title="اضغط لاختيار السورة والآيات"
+              >
+                {parsedMurajaa ? (
+                  <>
+                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                      {parsedMurajaa.ayahRange}
+                    </span>
+                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                      {parsedMurajaa.surahName}
+                    </span>
+                  </>
+                ) : cleanMurajaa ? (
+                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    {cleanMurajaa.replace(/[()]/g, '').trim()}
+                  </span>
                 ) : (
-                  <div className="leading-tight flex items-center gap-1.5 flex-wrap">
-                    {parsedMurajaa ? (
-                      <>
-                        <span className="text-[#0E5C56] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                          {parsedMurajaa.ayahRange}
-                        </span>
-                        <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg">
-                          {parsedMurajaa.surahName}
-                        </span>
-                      </>
-                    ) : cleanMurajaa ? (
-                      <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg break-words">{cleanMurajaa}</span>
-                    ) : (
-                      <span className="text-[#5B6478] italic text-xs font-normal">None assigned</span>
-                    )}
-                  </div>
+                  <span className="text-[#5B6478] italic font-normal text-[11px]">اضغط لاختيار السورة...</span>
+                )}
+              </button>
+            ) : (
+              <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
+                {parsedMurajaa ? (
+                  <>
+                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                      {parsedMurajaa.ayahRange}
+                    </span>
+                    <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                      {parsedMurajaa.surahName}
+                    </span>
+                  </>
+                ) : cleanMurajaa ? (
+                  <span className="text-[#1F2A3D] font-extrabold text-base sm:text-lg truncate">
+                    {cleanMurajaa.replace(/[()]/g, '').trim()}
+                  </span>
+                ) : (
+                  <span className="text-[#5B6478] italic text-xs font-normal">None assigned</span>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* GradeBadge: directly beside the homework, parallel and identical in width */}
-              <div className="w-full min-w-0 flex items-center justify-end">
-                <GradeBadge
-                  grade={entry.murajaaGrade}
-                  editable={isTeacherMode}
-                  onChange={handleMurajaaGradeChange}
-                  idPrefix={`murajaa-${entry.id}`}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          );
-        })()}
+          <div className="shrink-0 flex items-center justify-end">
+            <GradeBadge
+              grade={entry.murajaaGrade}
+              editable={isTeacherMode}
+              onChange={handleMurajaaGradeChange}
+              idPrefix={`murajaa-${entry.id}`}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* On Time Slot: Separate card on the right for student Yusuf, matching date badge layout */}
+      {showOnTime && (
+        <OnTimeBadge
+          value={entry.onTimeScore}
+          editable={isTeacherMode}
+          onChange={(newScore) => onUpdateEntry({ ...entry, onTimeScore: newScore })}
+          idPrefix={`ontime-${entry.id}`}
+        />
+      )}
 
       {isTeacherMode && (
         <QuranAyahPickerModal

@@ -36,12 +36,12 @@ export const MainPortal: React.FC<MainPortalProps> = ({
       setPasswordInput('');
       setErrorMsg('');
     } else {
-      setErrorMsg('كلمة المرور غير صحيحة (تأكد من إدخال ١٢٢٣٣٣)');
+      setErrorMsg('كلمة المرور غير صحيحة');
     }
   };
 
   return (
-    <div id="main-portal-view" className="min-h-screen bg-[#FAF6EE] text-[#1F2A3D] flex flex-col font-sans select-none" dir="rtl">
+    <div id="main-portal-view" className="min-h-screen bg-[#F5EFDD] text-[#1F2A3D] flex flex-col font-sans select-none" dir="rtl">
       {/* Top Header */}
       <header className="bg-gradient-to-r from-[#0E5C56] via-[#0B4D48] to-[#0A423E] text-[#F1E7CE] shadow-md border-b border-[#B8860B]/40">
         <div className="h-0.5 bg-gradient-to-r from-transparent via-[#B8860B] to-transparent w-full" />
@@ -182,7 +182,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
             </div>
 
             <p className="text-xs text-[#5B6478] leading-relaxed">
-              أدخل كلمة المرور لتفعيل صلاحيات المعلم (١٢٢٣٣٣).
+              أدخل كلمة المرور لتفعيل صلاحيات المعلم.
             </p>
 
             <form onSubmit={handleLoginSubmit} className="space-y-3">
@@ -195,7 +195,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
                     setPasswordInput(e.target.value);
                     setErrorMsg('');
                   }}
-                  placeholder="كلمة المرور (١٢٢٣٣٣)"
+                  placeholder="كلمة المرور..."
                   className="w-full px-3 py-2 text-sm bg-white border border-[#B8860B]/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0E5C56] text-center tracking-widest font-mono"
                 />
                 {errorMsg && (

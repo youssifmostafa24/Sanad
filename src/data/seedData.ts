@@ -404,6 +404,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
           hifzGrade: null,
           murajaaText: "مريم ( 1–50 )",
           murajaaGrade: null,
+          onTimeScore: null,
         },
         {
           id: 'yusuf-entry-2',
@@ -412,6 +413,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
           hifzGrade: 100,
           murajaaText: "الكهف ( 1–50 )",
           murajaaGrade: 80,
+          onTimeScore: 100,
         },
         {
           id: 'yusuf-entry-3',
@@ -420,6 +422,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
           hifzGrade: 80,
           murajaaText: "الإسراء ( 1–50 )",
           murajaaGrade: 100,
+          onTimeScore: 80,
         },
         {
           id: 'yusuf-entry-prev-1',
@@ -428,6 +431,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
           hifzGrade: 100,
           murajaaText: "الكهف ( 51–110 )",
           murajaaGrade: 100,
+          onTimeScore: 100,
         },
       ],
     },

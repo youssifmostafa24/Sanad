@@ -629,7 +629,7 @@ export default function App() {
   return (
     <div
       id="sanad-app-root"
-      className="w-full h-screen flex flex-col bg-[#F1E7CE] text-[#1F2A3D] font-sans overflow-hidden selection:bg-[#B8860B]/20"
+      className="w-full h-screen flex flex-col bg-[#F5EFDD] text-[#1F2A3D] font-sans overflow-hidden selection:bg-[#B8860B]/20"
       style={{
         backgroundImage: `radial-gradient(circle at 10% 20%, rgba(184, 134, 11, 0.04) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(14, 92, 86, 0.05) 0%, transparent 40%)`,
       }}
@@ -671,7 +671,7 @@ export default function App() {
             {monthEntries.length === 0 ? (
               <div
                 id="empty-month-state"
-                className="rounded-xl border border-dashed border-[#B8860B]/25 bg-[#FBF6E8] p-5 text-center shadow-2xs"
+                className="rounded-2xl border border-dashed border-[#B8860B]/25 bg-white p-5 text-center shadow-2xs"
               >
                 <BookOpen className="w-7 h-7 mx-auto text-[#B8860B]/60 mb-1.5" />
                 <h3 className="font-sans font-bold text-xs sm:text-sm text-[#0E5C56]">
@@ -679,71 +679,77 @@ export default function App() {
                 </h3>
               </div>
             ) : (
-              monthEntries.map((entry, idx) => {
-                // Calculate week bounds for this entry
-                const weekBounds = getWeekBounds(parseLocalDate(entry.date));
-                const weekEndThursday = weekBounds.endStr;
-                const nextSaturdayStr = addDays(weekEndThursday, 2);
-
-                // Check if the week concludes in the currently viewed month
-                // Per user requirement: If the month ends before the week ends, do not put evaluation at the end of the incomplete month,
-                // evaluate in the next month upon the week's completion for the whole week.
-                const weekEndMonthPrefix = weekEndThursday.slice(0, 7);
-                const isWeekEndingInCurrentMonth = weekEndMonthPrefix === selectedMonthPrefix;
-
-                // Is this entry the last entry of its week in this month's view?
-                const nextEntry = monthEntries[idx + 1];
-                const isLastEntryOfWeekInMonth =
-                  !nextEntry ||
-                  getWeekBounds(parseLocalDate(nextEntry.date)).endStr !== weekEndThursday;
-
-                // Star band only appears when the week is completed (has subsequent entry on/after next Saturday)
-                const hasSubsequentSaturdayEntry = Boolean(
-                  activeStudent?.entries?.some((e) => e.date >= nextSaturdayStr)
+              (() => {
+                const isYusuf = Boolean(
+                  activeStudent && (
+                    activeStudent.id === 'student-yusuf' ||
+                    activeStudent.name.toLowerCase().includes('yusuf') ||
+                    activeStudent.arabicName?.includes('يوسف')
+                  )
                 );
 
-                const shouldShowStarBand =
-                  isWeekEndingInCurrentMonth &&
-                  isLastEntryOfWeekInMonth &&
-                  hasSubsequentSaturdayEntry;
+                return monthEntries.map((entry, idx) => {
+                  // Calculate week bounds for this entry
+                  const weekBounds = getWeekBounds(parseLocalDate(entry.date));
+                  const weekEndThursday = weekBounds.endStr;
+                  const nextSaturdayStr = addDays(weekEndThursday, 2);
 
-                const weekRating =
-                  shouldShowStarBand && activeStudent
-                    ? getWeeklyStarRating(
-                        weekEndThursday,
-                        activeStudent.entries,
-                        activeStudent.manualWeeklyStars,
-                        new Date()
-                      )
-                    : null;
+                  const weekEndMonthPrefix = weekEndThursday.slice(0, 7);
+                  const isWeekEndingInCurrentMonth = weekEndMonthPrefix === selectedMonthPrefix;
 
-                return (
-                  <React.Fragment key={`entry-group-${entry.id}`}>
-                    <HomeworkRow
-                      key={`month-entry-${entry.id}`}
-                      entry={entry}
-                      isTeacherMode={isTeacherMode}
-                      isMostRecentUngraded={entry.id === mostRecentUngradedEntryId}
-                      isSingleMostRecentInView={entry.id === singleMostRecentInViewId}
-                      selectedMonthPrefix={selectedMonthPrefix}
-                      studentSurahRatings={activeStudent?.surahRatings}
-                      onUpdateEntry={handleUpdateEntry}
-                      onDeleteEntry={handleDeleteEntry}
-                      onDuplicateEntry={handleDuplicateEntry}
-                      onUpdateSurahStatus={handleUpdateSurahStatus}
-                    />
+                  const nextEntry = monthEntries[idx + 1];
+                  const isLastEntryOfWeekInMonth =
+                    !nextEntry ||
+                    getWeekBounds(parseLocalDate(nextEntry.date)).endStr !== weekEndThursday;
 
-                    {/* Weekly Star Band */}
-                    {shouldShowStarBand && weekRating !== null && (
-                      <WeeklyStarBand
-                        key={`week-stars-${weekEndThursday}`}
-                        stars={weekRating.stars}
-                        idPrefix={`week-stars-${weekEndThursday}`}
+                  const hasSubsequentSaturdayEntry = Boolean(
+                    activeStudent?.entries?.some((e) => e.date >= nextSaturdayStr)
+                  );
+
+                  const shouldShowStarBand =
+                    isWeekEndingInCurrentMonth &&
+                    isLastEntryOfWeekInMonth &&
+                    hasSubsequentSaturdayEntry;
+
+                  const weekRating =
+                    shouldShowStarBand && activeStudent
+                      ? getWeeklyStarRating(
+                          weekEndThursday,
+                          activeStudent.entries,
+                          activeStudent.manualWeeklyStars,
+                          new Date()
+                        )
+                      : null;
+
+                  return (
+                    <React.Fragment key={`entry-group-${entry.id}`}>
+                      <HomeworkRow
+                        key={`month-entry-${entry.id}`}
+                        entry={entry}
+                        isTeacherMode={isTeacherMode}
+                        isMostRecentUngraded={entry.id === mostRecentUngradedEntryId}
+                        isSingleMostRecentInView={entry.id === singleMostRecentInViewId}
+                        selectedMonthPrefix={selectedMonthPrefix}
+                        studentSurahRatings={activeStudent?.surahRatings}
+                        showOnTime={isYusuf}
+                        onUpdateEntry={handleUpdateEntry}
+                        onDeleteEntry={handleDeleteEntry}
+                        onDuplicateEntry={handleDuplicateEntry}
+                        onUpdateSurahStatus={handleUpdateSurahStatus}
                       />
-                    )}
-                  </React.Fragment>
-                );
-              })
+
+                      {/* Weekly Star Band */}
+                      {shouldShowStarBand && weekRating !== null && (
+                        <WeeklyStarBand
+                          key={`week-stars-${weekEndThursday}`}
+                          stars={weekRating.stars}
+                          idPrefix={`week-stars-${weekEndThursday}`}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                });
+              })()
             )}
 
             {/* Teacher Mode: Single "Repeat +" Button as requested */}

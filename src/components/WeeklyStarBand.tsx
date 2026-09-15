@@ -12,12 +12,12 @@ export const WeeklyStarBand: React.FC<WeeklyStarBandProps> = ({ stars, idPrefix 
   return (
     <div
       id={idPrefix}
-      className="w-full py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#F5C842] via-[#FBD466] to-[#F5C842] flex items-center justify-center shadow-xs my-1 select-none border border-[#EAB308]/30"
+      className="w-full py-1.5 sm:py-2 rounded-2xl bg-gradient-to-r from-[#F5C842] via-[#FBD466] to-[#F5C842] flex items-center justify-center shadow-xs my-1 select-none border border-[#EAB308]/30"
       title={`التقييم الأسبوعي: ${clampedStars} من 5 نجوم`}
     >
       {/* Light pill container matching the reference design */}
       <div
-        className="bg-[#E5E9EE] px-4 sm:px-6 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-2xs"
+        className="bg-[#E5E9EE] px-4 sm:px-6 py-1 sm:py-1.5 rounded-full flex items-center justify-center gap-1.5 sm:gap-2.5 shadow-2xs"
         dir="ltr"
       >
         {[1, 2, 3, 4, 5].map((idx) => {
