@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { X, Search, BookOpen, Award, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Search, BookOpen } from 'lucide-react';
 import {
   QURAN_SURAHS,
   SURAH_STATUS_OPTIONS,
@@ -12,7 +12,7 @@ interface SurahProgressModalProps {
   onClose: () => void;
   student: Student;
   isTeacherMode: boolean;
-  onUpdateSurahStatus: (studentId: string, surahNumber: number, status: SurahMemorizationStatus) => void;
+  onUpdateSurahStatus: (surahNumber: number, status: SurahMemorizationStatus) => void;
 }
 
 export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
@@ -25,9 +25,24 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const ratings = student.surahRatings || {};
+  // Reactive local ratings state to guarantee instant background color change on selection
+  const [localRatings, setLocalRatings] = useState<Record<number, SurahMemorizationStatus>>(() => ({
+    ...(student.surahRatings || {}),
+  }));
 
-  // Compute status counts
+  useEffect(() => {
+    setLocalRatings(student.surahRatings || {});
+  }, [student.surahRatings]);
+
+  const handleStatusChange = (surahNumber: number, newStatus: SurahMemorizationStatus) => {
+    setLocalRatings((prev) => ({
+      ...prev,
+      [surahNumber]: newStatus,
+    }));
+    onUpdateSurahStatus(surahNumber, newStatus);
+  };
+
+  // Compute status counts dynamically from localRatings
   const statusCounts = useMemo(() => {
     const counts: Record<SurahMemorizationStatus, number> = {
       not_memorized: 0,
@@ -39,12 +54,12 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
     };
 
     QURAN_SURAHS.forEach((s) => {
-      const st = ratings[s.number] || 'not_memorized';
+      const st = localRatings[s.number] || 'not_memorized';
       counts[st] = (counts[st] || 0) + 1;
     });
 
     return counts;
-  }, [ratings]);
+  }, [localRatings]);
 
   // Filter surahs: ordered from Surat An-Nas (114) down to Surat Al-Fatihah (1)
   const filteredSurahs = useMemo(() => {
@@ -58,14 +73,14 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
 
       if (!matchesSearch) return false;
 
-      const currentStatus = ratings[s.number] || 'not_memorized';
+      const currentStatus = localRatings[s.number] || 'not_memorized';
       if (statusFilter !== 'all' && currentStatus !== statusFilter) {
         return false;
       }
 
       return true;
     });
-  }, [searchQuery, statusFilter, ratings]);
+  }, [searchQuery, statusFilter, localRatings]);
 
   if (!isOpen) return null;
 
@@ -180,7 +195,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {filteredSurahs.map((surah) => {
-                const currentStatus = ratings[surah.number] || 'not_memorized';
+                const currentStatus = localRatings[surah.number] || 'not_memorized';
                 const meta = getSurahStatusMeta(currentStatus);
 
                 return (
@@ -192,29 +207,33 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
                     }}
                     title={
                       isTeacherMode
-                        ? `سورة ${surah.arabicName} — اضغط لتغيير التقييم`
-                        : `سورة ${surah.arabicName}`
+                        ? `${surah.arabicName} - ${surah.name} — اضغط لتغيير التقييم`
+                        : `${surah.arabicName} - ${surah.name}`
                     }
                   >
-                    {/* Surah Name Only */}
-                    <span className="text-xs sm:text-sm font-bold text-white font-arabic truncate drop-shadow-2xs select-none">
-                      سورة {surah.arabicName}
-                    </span>
+                    {/* Surah Name: Arabic - English (e.g. العلق - Al-Alaq) */}
+                    <div className="flex items-center justify-center gap-1 w-full max-w-full px-1 select-none pointer-events-none truncate text-white drop-shadow-2xs">
+                      <span className="text-xs sm:text-[13px] font-bold font-arabic truncate">
+                        {surah.arabicName}
+                      </span>
+                      <span className="text-[11px] sm:text-xs font-medium text-white/90 font-sans tracking-tight shrink-0">
+                        - {surah.name}
+                      </span>
+                    </div>
 
                     {/* In Teacher Mode: Transparent full-card select to change status on click */}
                     {isTeacherMode && (
                       <select
-                        aria-label={`تقييم سورة ${surah.arabicName}`}
+                        aria-label={`تقييم ${surah.arabicName} - ${surah.name}`}
                         value={currentStatus}
                         onChange={(e) =>
-                          onUpdateSurahStatus(
-                            student.id,
+                          handleStatusChange(
                             surah.number,
                             e.target.value as SurahMemorizationStatus
                           )
                         }
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        title={`اضغط لتغيير تقييم سورة ${surah.arabicName}`}
+                        title={`اضغط لتغيير تقييم ${surah.arabicName} - ${surah.name}`}
                       >
                         {SURAH_STATUS_OPTIONS.map((opt) => (
                           <option

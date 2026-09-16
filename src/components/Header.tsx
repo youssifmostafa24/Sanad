@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { KeyRound, Check, RotateCcw, Menu, Home } from 'lucide-react';
+import { KeyRound, Menu, Home } from 'lucide-react';
 import { Family } from '../types';
 import { verifyTeacherPassword } from '../utils/authUtils';
 
@@ -128,29 +128,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Saved / Auto-save Indicator */}
-          <div
-            id="autosave-status-indicator"
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 text-[#86EFAC] text-[10.5px] font-bold select-none border border-[#86EFAC]/25"
-            title="تم الحفظ التلقائي بنجاح"
-          >
-            <Check className="w-3 h-3 text-[#86EFAC] stroke-[3]" />
-            <span className="font-sans">Saved</span>
-          </div>
-
-          {/* Teacher Mode Reset Demo Data */}
-          {isTeacherMode && onResetData && (
-            <button
-              id="reset-demo-data-btn"
-              type="button"
-              onClick={onResetData}
-              title="Reset sample homework entries"
-              className="p-1.5 rounded-lg text-[#F1E7CE]/70 hover:text-white hover:bg-[#FBF6E8]/15 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
-
           {/* Teacher / Back to student mode Button */}
           {isTeacherMode ? (
             <button
@@ -158,9 +135,9 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onExitTeacherMode}
               className="px-2.5 sm:px-3.5 py-1 bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg text-xs font-bold tracking-wide transition-colors cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
-              title="Back to student mode"
+              title="Student"
             >
-              Back to student mode
+              Student
             </button>
           ) : (
             <div className="relative">

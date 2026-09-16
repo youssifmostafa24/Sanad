@@ -19,10 +19,11 @@ import { MonthNavigator } from './components/WeekNavigator';
 import { MainPortal } from './components/MainPortal';
 import { StudentAttendanceModal } from './components/StudentAttendanceModal';
 import { SurahProgressModal } from './components/SurahProgressModal';
+import { StudentSettingsModal } from './components/StudentSettingsModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { isTeacherAuthenticatedStored, setTeacherAuthenticatedStored } from './utils/authUtils';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ArrowDown } from 'lucide-react';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
   fetchAllDataFromSupabase,
@@ -138,6 +139,11 @@ export default function App() {
   const [isFamilyAttendanceOpen, setIsFamilyAttendanceOpen] = useState<boolean>(false);
   const [attendanceModalStudentId, setAttendanceModalStudentId] = useState<string | null>(null);
   const [selectedSurahStudent, setSelectedSurahStudent] = useState<Student | null>(null);
+  const [settingsStudentId, setSettingsStudentId] = useState<string | null>(null);
+
+  const settingsStudent = useMemo(() => {
+    return settingsStudentId ? data.students.find((s) => s.id === settingsStudentId) || null : null;
+  }, [data.students, settingsStudentId]);
 
   const handleTeacherLoginSuccess = () => {
     setIsTeacherAuthenticated(true);
@@ -366,11 +372,29 @@ export default function App() {
     }
   }, [activeStudentId]);
 
-  // Auto-scroll directly to the latest homework entry so the student never needs to scroll manually
+  // Reset scroll to top whenever the student or month changes (normal natural scroll behavior)
   useEffect(() => {
     if (currentView !== 'family') return;
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeStudentId, selectedYearMonth.year, selectedYearMonth.month, currentView]);
 
-    const scrollTimer = setTimeout(() => {
+  // Handler to smoothly scroll directly to today's / latest homework entry
+  const handleScrollToTodayHomework = () => {
+    // If latest entry is in a different month, switch to it first
+    if (activeStudent?.entries && activeStudent.entries.length > 0) {
+      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+      const latest = sorted[0];
+      if (latest) {
+        const [y, m] = latest.date.split('-').map(Number);
+        if (y && m && (selectedYearMonth.year !== y || selectedYearMonth.month !== m)) {
+          setSelectedYearMonth({ year: y, month: m });
+        }
+      }
+    }
+
+    setTimeout(() => {
       if (latestHomeworkRef.current) {
         latestHomeworkRef.current.scrollIntoView({
           behavior: 'smooth',
@@ -382,10 +406,8 @@ export default function App() {
           behavior: 'smooth',
         });
       }
-    }, 120);
-
-    return () => clearTimeout(scrollTimer);
-  }, [activeStudentId, selectedYearMonth.year, selectedYearMonth.month, currentView, monthEntries.length]);
+    }, 50);
+  };
 
   // Scroll listener for header auto-hide/show
   const handleScroll = () => {
@@ -718,6 +740,24 @@ export default function App() {
         className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-16 sm:pb-20 px-1.5 sm:px-4 md:px-6"
       >
         <div className="w-full max-w-3xl sm:max-w-4xl mx-auto flex flex-col items-stretch space-y-2.5">
+          {/* Quick Jump to Today's Homework Button (Short English text with Arabic tooltip) */}
+          {monthEntries.length > 0 && (
+            <div className="flex justify-center w-full px-2 pt-0.5">
+              <button
+                id="jump-to-today-homework-btn"
+                type="button"
+                onClick={handleScrollToTodayHomework}
+                className="group flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 bg-gradient-to-r from-[#0E5C56] to-[#127068] hover:from-[#0B4A45] hover:to-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-sm font-bold shadow-sm hover:shadow-md active:scale-95 transition-all cursor-pointer border border-[#B8860B]/30"
+                title="اضغط هنا للذهاب إلى واجبك اليوم"
+              >
+                <span className="font-sans font-bold tracking-tight">
+                  Go to Today's Homework
+                </span>
+                <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E5C378] group-hover:translate-y-0.5 transition-transform stroke-[2.5]" />
+              </button>
+            </div>
+          )}
+
           {/* Month Navigator Bar */}
           <MonthNavigator
             isCurrent={isCurrentMonth}
@@ -850,7 +890,24 @@ export default function App() {
         onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
         onOpenSurahProgress={(st) => setSelectedSurahStudent(st)}
         onOpenPortal={handleOpenPortal}
+        onOpenStudentSettings={(st) => {
+          setIsSidebarOpen(false);
+          setSettingsStudentId(st.id);
+        }}
       />
+
+      {/* Dedicated Separate Page / Modal for Student Settings (Attendance Days & Direct Share Link) */}
+      {settingsStudent && (
+        <StudentSettingsModal
+          isOpen={Boolean(settingsStudent)}
+          onClose={() => setSettingsStudentId(null)}
+          student={settingsStudent}
+          familyName={activeFamily?.name}
+          familyId={activeFamily?.id}
+          isTeacherMode={isTeacherMode}
+          onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
+        />
+      )}
 
       {/* Student Attendance Settings Modal (Teacher Mode) */}
       {activeFamily && (
@@ -873,7 +930,7 @@ export default function App() {
         <SurahProgressModal
           isOpen={Boolean(selectedSurahStudent)}
           onClose={() => setSelectedSurahStudent(null)}
-          student={selectedSurahStudent}
+          student={data.students.find((s) => s.id === selectedSurahStudent.id) || selectedSurahStudent}
           isTeacherMode={isTeacherMode}
           onUpdateSurahStatus={(surahNumber, status) => {
             handleModalUpdateSurahStatus(selectedSurahStudent.id, surahNumber, status);

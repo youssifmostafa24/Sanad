@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { BookOpen } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { Entry, GradeValue, SurahMemorizationStatus } from '../types';
 import { getWeekdayShort, getDayOfMonth, parseLocalDate } from '../utils/dateUtils';
 import { GradeBadge } from './GradeBadge';
 import { OnTimeBadge } from './OnTimeBadge';
 import { QuranAyahPickerModal } from './QuranAyahPickerModal';
-import { normalizeQuranHomeworkText, parseQuranHomework, parseHomeworkDisplay } from '../data/quranSurahs';
+import {
+  normalizeQuranHomeworkText,
+  parseQuranHomework,
+  parseHomeworkDisplay,
+  getSurahFromHomework,
+} from '../data/quranSurahs';
+import { SurahStatusDot } from './SurahStatusDot';
 
 interface HomeworkRowProps {
   entry: Entry;
@@ -86,11 +92,23 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   const cleanMurajaa = entry.murajaaText ? entry.murajaaText.replace(/^(Review|ريفيو|حفظ)\s*:\s*/i, '') : '';
   const parsedMurajaa = parseHomeworkDisplay(cleanMurajaa);
 
+  const hifzSurah = getSurahFromHomework(entry.hifzText);
+  const hifzSurahStatus =
+    hifzSurah && studentSurahRatings
+      ? studentSurahRatings[hifzSurah.number] || 'not_memorized'
+      : 'not_memorized';
+
+  const murajaaSurah = getSurahFromHomework(cleanMurajaa || entry.murajaaText);
+  const murajaaSurahStatus =
+    murajaaSurah && studentSurahRatings
+      ? studentSurahRatings[murajaaSurah.number] || 'not_memorized'
+      : 'not_memorized';
+
   return (
     <div
       id={`entry-row-${entry.id}`}
       className={`flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-150 ${
-        !isTeacherMode && isSingleMostRecentInView ? 'mb-4 sm:mb-4.5' : ''
+        !isTeacherMode && isSingleMostRecentInView ? 'mb-9 sm:mb-10' : ''
       }`}
     >
       {/* Left Card: Date, compact, bold weekday, editable date in Teacher mode */}
@@ -167,18 +185,29 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
           id={`hifz-row-${entry.id}`}
           className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[32px] md:min-h-[36px]"
         >
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-visible">
+            {/* Surah Status Dot placed to the left beside the numbers */}
+            {hifzSurah && (
+              <SurahStatusDot
+                surah={hifzSurah}
+                status={hifzSurahStatus}
+                isTeacherMode={isTeacherMode}
+                onUpdateStatus={onUpdateSurahStatus}
+                idPrefix={`hifz-dot-${entry.id}`}
+              />
+            )}
+
             {isTeacherMode ? (
               <button
                 id={`hifz-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('hifz')}
-                className="w-full text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
                 title="اضغط لتعديل السورة والآيات"
               >
                 {parsedHifz ? (
                   <>
-                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                    <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedHifz.ayahRange}
                     </span>
                     <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
@@ -197,7 +226,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
                 {parsedHifz ? (
                   <>
-                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                    <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedHifz.ayahRange}
                     </span>
                     <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
@@ -236,18 +265,29 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
           id={`murajaa-row-${entry.id}`}
           className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[32px] md:min-h-[36px]"
         >
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-visible">
+            {/* Surah Status Dot placed to the left beside the numbers */}
+            {murajaaSurah && (
+              <SurahStatusDot
+                surah={murajaaSurah}
+                status={murajaaSurahStatus}
+                isTeacherMode={isTeacherMode}
+                onUpdateStatus={onUpdateSurahStatus}
+                idPrefix={`murajaa-dot-${entry.id}`}
+              />
+            )}
+
             {isTeacherMode ? (
               <button
                 id={`murajaa-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('murajaa')}
-                className="w-full text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
                 title="اضغط لتعديل السورة والآيات"
               >
                 {parsedMurajaa ? (
                   <>
-                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                    <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedMurajaa.ayahRange}
                     </span>
                     <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
@@ -266,7 +306,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
                 {parsedMurajaa ? (
                   <>
-                    <span className="text-[#B8860B] font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
+                    <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
                       {parsedMurajaa.ayahRange}
                     </span>
                     <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
@@ -294,14 +334,18 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
           </div>
         </div>
 
-        {/* Student Mode: Attached "Your homework" badge below the latest homework card */}
+        {/* Student Mode: "Your homework" badge placed UNDER the latest homework card with upward arrow */}
         {!isTeacherMode && isSingleMostRecentInView && (
           <div
             id={`your-homework-badge-${entry.id}`}
-            className="absolute -bottom-3 sm:-bottom-3.5 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+            className="absolute top-[calc(100%+5px)] left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center"
           >
-            <div className="inline-flex items-center gap-1 sm:gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-0.5 bg-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-[13px] font-bold tracking-wide shadow-md border border-[#F5EFDD]/30 whitespace-nowrap">
-              <BookOpen className="w-3.5 h-3.5 text-[#B8860B] shrink-0" />
+            {/* Triangular pointer arrow seamlessly attached pointing directly up to the card above */}
+            <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[6px] border-b-[#0E5C56] -mb-[0.5px]" />
+
+            {/* Enlarged and wider badge pill */}
+            <div className="inline-flex items-center justify-center gap-2 sm:gap-2.5 px-6 py-1.5 sm:px-7 sm:py-2 bg-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-[13.5px] font-bold tracking-wide shadow-md border border-[#F5EFDD]/30 whitespace-nowrap">
+              <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#86EFAC] stroke-[2.5] shrink-0" />
               <span className="font-sans leading-tight select-none">Your homework</span>
             </div>
           </div>

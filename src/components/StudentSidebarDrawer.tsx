@@ -1,19 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
-  Check,
   BookOpen,
-  Calendar,
-  Link2,
-  Share2,
-  Home,
-  CheckCircle2,
+  Settings,
+  ChevronLeft,
   Sparkles,
 } from 'lucide-react';
 import { Student } from '../types';
 import { QURAN_SURAHS, QuranSurah } from '../data/quranSurahs';
-import { getAttendanceDaysSummary } from './StudentAttendanceModal';
 
 interface StudentSidebarDrawerProps {
   isOpen: boolean;
@@ -23,20 +18,11 @@ interface StudentSidebarDrawerProps {
   familyId?: string;
   isTeacherMode: boolean;
   onUpdateStudentTilawa: (studentId: string, surahNumber: number, ayahNumber: number) => void;
-  onUpdateStudentAttendanceDays: (studentId: string, days: number[]) => void;
+  onUpdateStudentAttendanceDays?: (studentId: string, days: number[]) => void;
   onOpenSurahProgress?: (student: Student) => void;
   onOpenPortal?: () => void;
+  onOpenStudentSettings?: (student: Student) => void;
 }
-
-const WEEK_DAYS: { dayIndex: number; label: string; shortLabel: string }[] = [
-  { dayIndex: 6, label: 'السبت', shortLabel: 'سبت' },
-  { dayIndex: 0, label: 'الأحد', shortLabel: 'أحد' },
-  { dayIndex: 1, label: 'الإثنين', shortLabel: 'إثنين' },
-  { dayIndex: 2, label: 'الثلاثاء', shortLabel: 'ثلاثاء' },
-  { dayIndex: 3, label: 'الأربعاء', shortLabel: 'أربعاء' },
-  { dayIndex: 4, label: 'الخميس', shortLabel: 'خميس' },
-  { dayIndex: 5, label: 'الجمعة', shortLabel: 'جمعة' },
-];
 
 export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
   isOpen,
@@ -46,12 +32,10 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
   familyId,
   isTeacherMode,
   onUpdateStudentTilawa,
-  onUpdateStudentAttendanceDays,
   onOpenSurahProgress,
   onOpenPortal,
+  onOpenStudentSettings,
 }) => {
-  const [copiedLink, setCopiedLink] = useState(false);
-
   // Close drawer on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,8 +54,6 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
     QURAN_SURAHS.find((s) => s.number === currentSurahNumber) || QURAN_SURAHS[0];
   const currentAyah = Math.min(student.tilawaAyah || 1, currentSurah.ayahCount);
 
-  const studentAttendanceDays = student.attendanceDays || [1, 5];
-
   const handleSurahChange = (surahNum: number) => {
     const targetSurah = QURAN_SURAHS.find((s) => s.number === surahNum);
     const maxAyahs = targetSurah ? targetSurah.ayahCount : 7;
@@ -81,54 +63,6 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
 
   const handleAyahChange = (ayahNum: number) => {
     onUpdateStudentTilawa(student.id, currentSurahNumber, ayahNum);
-  };
-
-  const handleToggleDay = (dayIndex: number) => {
-    let updated: number[];
-    if (studentAttendanceDays.includes(dayIndex)) {
-      if (studentAttendanceDays.length <= 1) return; // Keep at least one day
-      updated = studentAttendanceDays.filter((d) => d !== dayIndex);
-    } else {
-      updated = [...studentAttendanceDays, dayIndex].sort((a, b) => a - b);
-    }
-    onUpdateStudentAttendanceDays(student.id, updated);
-  };
-
-  const handleSetPresetDays = (days: number[]) => {
-    onUpdateStudentAttendanceDays(student.id, days);
-  };
-
-  const getShareUrl = () => {
-    if (!familyId) return window.location.href;
-    const url = new URL(window.location.origin + window.location.pathname);
-    url.searchParams.set('fam', familyId);
-    url.searchParams.set('st', student.id);
-    return url.toString();
-  };
-
-  const handleCopyLink = () => {
-    const url = getShareUrl();
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
-  };
-
-  const handleNativeShare = async () => {
-    const url = getShareUrl();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `جدول واجبات الطالب ${student.arabicName || student.name}`,
-          text: `متابعة جدول حفظ وتلاوة ${student.arabicName || student.name} في حلقة القرآن الكريم`,
-          url: url,
-        });
-      } catch {
-        // Fallback to copy
-        handleCopyLink();
-      }
-    } else {
-      handleCopyLink();
-    }
   };
 
   return (
@@ -207,7 +141,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <BookOpen className="w-4 h-4 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      أولاً: سورة التلاوة الحالية
+                      سورة التلاوة الحالية
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold text-[#8A6305] bg-[#B8860B]/15 px-2 py-0.5 rounded-full">
@@ -216,243 +150,112 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 shadow-2xs space-y-2.5">
-                  <p className="text-[11px] text-[#5B6478] font-medium leading-relaxed">
-                    حدد السورة ورقم الآية الحالية التي وصل إليها الطالب في ورد التلاوة:
-                  </p>
+                  {isTeacherMode ? (
+                    <>
+                      {/* Two Dropdowns Side-by-Side: Surahs + Ayahs of the selected Surah */}
+                      <div className="flex items-center gap-2 w-full">
+                        {/* Dropdown 1: سور القرآن الكريم */}
+                        <div className="flex-1 min-w-0">
+                          <label
+                            htmlFor="tilawa-surah-select"
+                            className="block text-[10px] font-bold text-[#5B6478] mb-1"
+                          >
+                            السورة:
+                          </label>
+                          <select
+                            id="tilawa-surah-select"
+                            value={currentSurahNumber}
+                            onChange={(e) => handleSurahChange(Number(e.target.value))}
+                            className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2 px-2 text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate"
+                          >
+                            {QURAN_SURAHS.map((s) => (
+                              <option key={`tilawa-s-${s.number}`} value={s.number}>
+                                {s.number}. سورة {s.arabicName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                  {/* Two Dropdowns Side-by-Side: Surahs + Ayahs of the selected Surah */}
-                  <div className="flex items-center gap-2 w-full">
-                    {/* Dropdown 1: سور القرآن الكريم */}
-                    <div className="flex-1 min-w-0">
-                      <label
-                        htmlFor="tilawa-surah-select"
-                        className="block text-[10px] font-bold text-[#5B6478] mb-1"
-                      >
-                        السورة:
-                      </label>
-                      <select
-                        id="tilawa-surah-select"
-                        value={currentSurahNumber}
-                        onChange={(e) => handleSurahChange(Number(e.target.value))}
-                        className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2 px-2 text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs truncate"
-                      >
-                        {QURAN_SURAHS.map((s) => (
-                          <option key={`tilawa-s-${s.number}`} value={s.number}>
-                            {s.number}. سورة {s.arabicName}
-                          </option>
-                        ))}
-                      </select>
+                        {/* Dropdown 2: بعدد آيات السورة المحددة */}
+                        <div className="w-24 sm:w-28 shrink-0">
+                          <label
+                            htmlFor="tilawa-ayah-select"
+                            className="block text-[10px] font-bold text-[#5B6478] mb-1"
+                          >
+                            الآية (من {currentSurah.ayahCount}):
+                          </label>
+                          <select
+                            id="tilawa-ayah-select"
+                            value={currentAyah}
+                            onChange={(e) => handleAyahChange(Number(e.target.value))}
+                            className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2 px-1 text-center text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
+                          >
+                            {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
+                              <option key={`tilawa-a-${n}`} value={n}>
+                                الآية {n}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Summary visual badge in Teacher mode */}
+                      <div className="pt-2 border-t border-[#B8860B]/15 flex items-center justify-between text-[11px] text-[#0E5C56] bg-[#FAF6EE] px-2.5 py-1.5 rounded-xl">
+                        <span className="font-semibold">الورد الحالي المسجل:</span>
+                        <span className="font-bold text-[#0E5C56]">
+                          سورة {currentSurah.arabicName} (آية {currentAyah})
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    /* Summary visual badge in Student mode */
+                    <div className="flex items-center justify-between text-xs sm:text-sm text-[#0E5C56] bg-[#FAF6EE] px-3.5 py-2.5 rounded-xl border border-[#B8860B]/20">
+                      <span className="font-semibold text-[#5B6478]">الورد الحالي المسجل:</span>
+                      <span className="font-bold text-[#0E5C56]">
+                        سورة {currentSurah.arabicName} (آية {currentAyah})
+                      </span>
                     </div>
-
-                    {/* Dropdown 2: بعدد آيات السورة المحددة */}
-                    <div className="w-24 sm:w-28 shrink-0">
-                      <label
-                        htmlFor="tilawa-ayah-select"
-                        className="block text-[10px] font-bold text-[#5B6478] mb-1"
-                      >
-                        الآية (من {currentSurah.ayahCount}):
-                      </label>
-                      <select
-                        id="tilawa-ayah-select"
-                        value={currentAyah}
-                        onChange={(e) => handleAyahChange(Number(e.target.value))}
-                        className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2 px-1 text-center text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
-                      >
-                        {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
-                          <option key={`tilawa-a-${n}`} value={n}>
-                            الآية {n}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Summary visual badge */}
-                  <div className="pt-2 border-t border-[#B8860B]/15 flex items-center justify-between text-[11px] text-[#0E5C56] bg-[#FAF6EE] px-2.5 py-1.5 rounded-xl">
-                    <span className="font-semibold">الورد الحالي المسجل:</span>
-                    <span className="font-bold text-[#0E5C56]">
-                      سورة {currentSurah.arabicName} (آية {currentAyah})
-                    </span>
-                  </div>
+                  )}
                 </div>
               </section>
 
               {/* =========================================================================
-                  ثانياً: الإعدادات
-                  الخاصة بالطالب والتي فيها أيام حضوره
+                  زر إعدادات الطالب (أيام الحضور ورابط المشاركة)
+                  يفتح صفحة منفصلة فيها إعدادات الطالب
                  ========================================================================= */}
-              <section id="section-student-settings" className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                    <Calendar className="w-4 h-4 text-[#B8860B]" />
-                    <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      ثانياً: الإعدادات (أيام الحضور)
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-bold text-[#0E5C56] bg-[#0E5C56]/15 px-2 py-0.5 rounded-full">
-                    مخصص لهذا الطالب
-                  </span>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 shadow-2xs space-y-3">
-                  <div>
-                    <p className="text-[11px] text-[#5B6478] font-medium leading-relaxed">
-                      اختر أيام حضور الطالب لتحديد مواعيد التسميع والترحيل التلقائي:
-                    </p>
-                  </div>
-
-                  {/* Interactive Week Days Grid: Sat to Fri */}
-                  <div className="grid grid-cols-7 gap-1" id="drawer-attendance-days-grid">
-                    {WEEK_DAYS.map(({ dayIndex, shortLabel, label }) => {
-                      const isSelected = studentAttendanceDays.includes(dayIndex);
-                      return (
-                        <button
-                          key={`drawer-day-${dayIndex}`}
-                          id={`drawer-day-toggle-${dayIndex}`}
-                          type="button"
-                          onClick={() => handleToggleDay(dayIndex)}
-                          title={`${label}: ${isSelected ? 'محدد' : 'غير محدد'}`}
-                          className={`py-2 px-0.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer border ${
-                            isSelected
-                              ? 'bg-[#0E5C56] text-[#F1E7CE] border-[#0E5C56] shadow-xs'
-                              : 'bg-[#FAF6EE] text-[#5B6478] hover:bg-[#F3EAD3] border-[#B8860B]/25'
-                          }`}
-                        >
-                          <span className="text-[10px] sm:text-[11px]">{shortLabel}</span>
-                          {isSelected ? (
-                            <div className="w-2 h-2 rounded-full bg-[#86EFAC]" />
-                          ) : (
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                          )}
-                        </button>
-                      );
-                    })}
+              <section id="section-student-settings-nav" className="pt-1">
+                <button
+                  type="button"
+                  id="drawer-student-settings-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenStudentSettings?.(student);
+                  }}
+                  className="w-full p-3.5 rounded-2xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border border-[#B8860B]/35 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#F1E7CE]/15 border border-[#B8860B]/30 flex items-center justify-center text-[#B8860B] group-hover:scale-105 transition-transform">
+                      <Settings className="w-5 h-5 text-[#F1E7CE]" />
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-[#F1E7CE]">
+                          إعدادات الطالب
+                        </span>
+                      </div>
+                      <span className="block text-[11px] text-[#F1E7CE]/75 mt-0.5">
+                        أيام الحضور ورابط المشاركة
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Quick Preset Buttons */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[10px] font-bold text-[#5B6478]">نماذج سريعة:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPresetDays([1, 5])}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
-                        studentAttendanceDays.length === 2 &&
-                        studentAttendanceDays.includes(1) &&
-                        studentAttendanceDays.includes(5)
-                          ? 'bg-[#0E5C56] text-white border-[#0E5C56]'
-                          : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
-                      }`}
-                    >
-                      إثنين + جمعة
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPresetDays([0, 2, 4])}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
-                        studentAttendanceDays.length === 3 &&
-                        studentAttendanceDays.includes(0) &&
-                        studentAttendanceDays.includes(2) &&
-                        studentAttendanceDays.includes(4)
-                          ? 'bg-[#0E5C56] text-white border-[#0E5C56]'
-                          : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
-                      }`}
-                    >
-                      أحد + ثلاثاء + خميس
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPresetDays([6, 1, 3])}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer ${
-                        studentAttendanceDays.length === 3 &&
-                        studentAttendanceDays.includes(6) &&
-                        studentAttendanceDays.includes(1) &&
-                        studentAttendanceDays.includes(3)
-                          ? 'bg-[#0E5C56] text-white border-[#0E5C56]'
-                          : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
-                      }`}
-                    >
-                      سبت + إثنين + أربعاء
-                    </button>
+                  <div className="flex items-center gap-1 text-[#B8860B]">
+                    <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                   </div>
-
-                  {/* Summary of Active Days */}
-                  <div className="pt-2 border-t border-[#B8860B]/15 flex items-center justify-between text-[11px] text-[#0E5C56] bg-[#FAF6EE] px-2.5 py-1.5 rounded-xl">
-                    <span className="font-semibold">الأيام المعتمدة:</span>
-                    <span className="font-bold text-[#0E5C56]">
-                      {getAttendanceDaysSummary(studentAttendanceDays)}
-                    </span>
-                  </div>
-                </div>
+                </button>
               </section>
 
-              {/* =========================================================================
-                  ثالثاً: رابط المشاركة
-                 ========================================================================= */}
-              <section id="section-share-link" className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                    <Link2 className="w-4 h-4 text-[#B8860B]" />
-                    <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      ثالثاً: رابط المشاركة
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-bold text-[#16A34A] bg-[#16A34A]/15 px-2 py-0.5 rounded-full">
-                    مباشر للطالب
-                  </span>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 shadow-2xs space-y-3">
-                  <p className="text-[11px] text-[#5B6478] font-medium leading-relaxed">
-                    شارك هذا الرابط مع الطالب أو ولي الأمر لمتابعة جدول الواجبات والتقييمات مباشرة:
-                  </p>
-
-                  {/* URL Display and Copy Button */}
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      readOnly
-                      value={getShareUrl()}
-                      className="flex-1 bg-[#FAF6EE] border border-[#B8860B]/30 rounded-xl px-2.5 py-2 text-[11px] text-[#5B6478] font-mono select-all focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/30 truncate"
-                    />
-
-                    <button
-                      id="drawer-copy-share-btn"
-                      type="button"
-                      onClick={handleCopyLink}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs ${
-                        copiedLink
-                          ? 'bg-[#16A34A] text-white border border-[#16A34A]'
-                          : 'bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border border-[#0E5C56]'
-                      }`}
-                    >
-                      {copiedLink ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>تم النسخ!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Link2 className="w-3.5 h-3.5 text-[#B8860B]" />
-                          <span>نسخ</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Native Mobile Share Button */}
-                  <button
-                    id="drawer-native-share-btn"
-                    type="button"
-                    onClick={handleNativeShare}
-                    className="w-full py-2 px-3 rounded-xl bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
-                  >
-                    <Share2 className="w-3.5 h-3.5 text-[#B8860B]" />
-                    <span>مشاركة عبر التطبيقات (واتساب / تليجرام)</span>
-                  </button>
-                </div>
-              </section>
-
-              {/* Complementary Utilities: Surah Memorization Matrix & Main Portal */}
+              {/* Complementary Utilities: Surah Memorization Matrix */}
               <div className="pt-2 border-t border-[#B8860B]/20 space-y-2">
                 {onOpenSurahProgress && (
                   <button
@@ -471,23 +274,6 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                     <span className="text-[10px] text-[#8A6305] bg-[#B8860B]/15 px-2 py-0.5 rounded-full font-sans">
                       عرض
                     </span>
-                  </button>
-                )}
-
-                {onOpenPortal && (
-                  <button
-                    type="button"
-                    id="drawer-back-to-portal-btn"
-                    onClick={() => {
-                      onClose();
-                      onOpenPortal();
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-[#FAF6EE] hover:bg-[#F3EAD3] border border-[#B8860B]/20 text-[#5B6478] hover:text-[#0E5C56] text-xs font-medium transition-colors cursor-pointer flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Home className="w-3.5 h-3.5 text-[#5B6478]" />
-                      <span>الانتقال للبوابة الرئيسية (الأسر)</span>
-                    </div>
                   </button>
                 )}
               </div>

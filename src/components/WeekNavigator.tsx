@@ -62,20 +62,20 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
     <div
       id="month-navigator-bar"
       dir="ltr"
-      className="w-full rounded-3xl bg-white p-3.5 sm:p-4.5 select-none transition-all shadow-xs"
+      className="w-[92%] sm:w-[88%] md:w-[82%] max-w-[460px] sm:max-w-[500px] mx-auto rounded-3xl bg-white p-3 sm:p-3.5 select-none transition-all shadow-xs"
     >
       {/* Top Header: Previous Button (<), Month & Year, Next Button (>) */}
-      <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
+      <div className="flex items-center justify-between gap-2.5 px-1">
         {/* Previous Month (<) */}
         <button
           id="prev-month-btn"
           type="button"
           onClick={onPrevMonth}
-          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[#F5EFDD] hover:bg-[#EADBBD] text-[#0E5C56] flex items-center justify-center transition-all cursor-pointer active:scale-90 shrink-0"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#F5EFDD] hover:bg-[#EADBBD] text-[#0E5C56] flex items-center justify-center transition-all cursor-pointer active:scale-90 shrink-0"
           title="Previous month"
           aria-label="Previous month"
         >
-          <ChevronLeft className="w-5 h-5 text-[#0E5C56]" strokeWidth={2.6} />
+          <ChevronLeft className="w-4.5 h-4.5 text-[#0E5C56]" strokeWidth={2.6} />
         </button>
 
         {/* Month & Year Title */}
@@ -83,7 +83,7 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
           id="current-month-btn"
           type="button"
           onClick={onGoToCurrentMonth}
-          className="font-sans font-extrabold text-xl sm:text-2xl text-[#0E5C56] tracking-tight hover:opacity-80 transition-opacity cursor-pointer text-center truncate"
+          className="font-sans font-extrabold text-lg sm:text-xl text-[#0E5C56] tracking-tight hover:opacity-80 transition-opacity cursor-pointer text-center truncate"
           title={isCurrent ? 'Current month' : 'Click to go to current month'}
         >
           {monthLabel || 'October 2026'}
@@ -94,11 +94,11 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
           id="next-month-btn"
           type="button"
           onClick={onNextMonth}
-          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[#F5EFDD] hover:bg-[#EADBBD] text-[#0E5C56] flex items-center justify-center transition-all cursor-pointer active:scale-90 shrink-0"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#F5EFDD] hover:bg-[#EADBBD] text-[#0E5C56] flex items-center justify-center transition-all cursor-pointer active:scale-90 shrink-0"
           title="Next month"
           aria-label="Next month"
         >
-          <ChevronRight className="w-5 h-5 text-[#0E5C56]" strokeWidth={2.6} />
+          <ChevronRight className="w-4.5 h-4.5 text-[#0E5C56]" strokeWidth={2.6} />
         </button>
       </div>
 
@@ -106,7 +106,7 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
       {entries.length > 0 ? (
         <div
           ref={scrollContainerRef}
-          className="mt-3.5 sm:mt-4 flex items-center justify-start sm:justify-center gap-2 sm:gap-3.5 overflow-x-auto py-1.5 px-2 scroll-smooth no-scrollbar"
+          className="mt-2.5 sm:mt-3 flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2.5 overflow-x-auto py-1 px-1 scroll-smooth no-scrollbar"
         >
           {entries.map((entry) => {
             const isActive = activeEntryId === entry.id;

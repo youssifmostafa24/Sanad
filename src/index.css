@@ -4,6 +4,14 @@
   --font-serif: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-arabic: "Amiri", serif;
+  --font-ayah: "Baloo Bhaijaan 2", system-ui, -apple-system, sans-serif;
+}
+
+/* Ayah numbers font utility */
+.font-ayah {
+  font-family: 'Baloo Bhaijaan 2', system-ui, -apple-system, sans-serif;
+  font-weight: 800;
+  font-feature-settings: "tnum";
 }
 
 /* Custom scrollbar utility */

@@ -242,7 +242,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                     id="picker-from-ayah-select"
                     value={fromAyah}
                     onChange={(e) => handleFromAyahChange(Number(e.target.value))}
-                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
+                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs font-ayah"
                     title="الرقم الأصغر (من)"
                   >
                     {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
@@ -273,7 +273,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                     id="picker-to-ayah-select"
                     value={toAyah}
                     onChange={(e) => handleToAyahChange(Number(e.target.value))}
-                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs"
+                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs font-ayah"
                     title="الرقم الأكبر (إلى)"
                   >
                     {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => {
