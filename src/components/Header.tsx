@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { KeyRound, Menu, Home } from 'lucide-react';
+import { KeyRound, Menu, Home, Mic } from 'lucide-react';
 import { Family } from '../types';
 import { verifyTeacherPassword } from '../utils/authUtils';
 
@@ -15,6 +15,7 @@ interface HeaderProps {
   onOpenPortal: () => void;
   isTeacherAuthenticated: boolean;
   onTeacherLoginSuccess: () => void;
+  onOpenVoiceDictation?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPortal,
   isTeacherAuthenticated,
   onTeacherLoginSuccess,
+  onOpenVoiceDictation,
 }) => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [promptTarget, setPromptTarget] = useState<'teacher' | 'portal'>('teacher');
@@ -106,16 +108,20 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-105" />
           </button>
 
-          {/* Main Portal Button ("القائمة الرئيسية") - Placed after hamburger */}
+          {/* Main Portal Button ("القائمة الرئيسية") with Quran Homework Logo */}
           <button
             id="portal-home-nav-btn"
             type="button"
             onClick={handlePortalClick}
-            aria-label="القائمة الرئيسية للأسر"
-            title="القائمة الرئيسية (الأسر) / Main Portal"
-            className="p-1.5 rounded-lg text-[#B8860B] hover:text-[#F1E7CE] hover:bg-white/10 active:bg-white/20 transition-all cursor-pointer flex items-center justify-center group shrink-0"
+            aria-label="القائمة الرئيسية للأسر - Quran Homework"
+            title="القائمة الرئيسية للأسر / Quran Homework"
+            className="p-1 rounded-lg hover:bg-white/10 active:bg-white/20 transition-all cursor-pointer flex items-center justify-center group shrink-0"
           >
-            <Home className="w-5 h-5 sm:w-5.5 sm:h-5.5 transition-transform group-hover:scale-105" />
+            <img
+              src="/logo.png"
+              alt="Quran Homework Logo"
+              className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-full object-cover border border-[#B8860B]/70 shadow-xs group-hover:scale-105 transition-transform"
+            />
           </button>
 
           {/* Large Student Name */}
@@ -128,6 +134,21 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Smart Voice Dictation Button for Teacher */}
+          {isTeacherMode && onOpenVoiceDictation && (
+            <button
+              id="voice-dictation-header-btn"
+              type="button"
+              onClick={onOpenVoiceDictation}
+              className="px-2.5 sm:px-3 py-1 bg-gradient-to-r from-[#B8860B] to-[#976D07] hover:brightness-110 text-white rounded-lg text-xs font-bold tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+              title="إملاء صوتي للواجب بالذكاء الاصطناعي (AI)"
+            >
+              <Mic className="w-3.5 h-3.5 text-[#F1E7CE] animate-pulse" />
+              <span className="hidden sm:inline">إملاء صوتي (AI)</span>
+              <span className="sm:hidden">إملاء</span>
+            </button>
+          )}
+
           {/* Teacher / Back to student mode Button */}
           {isTeacherMode ? (
             <button

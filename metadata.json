@@ -1,5 +1,5 @@
 {
-  "name": "Sanad",
+  "name": "Quran Homework",
   "description": "A Qur'an memorization homework tracker connecting teachers, students, and parents with daily logs, grading, and weekly progress.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

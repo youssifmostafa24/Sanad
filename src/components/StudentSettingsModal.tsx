@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -6,9 +6,13 @@ import {
   Link2,
   Share2,
   Check,
-  Settings,
-  User,
-  ArrowRight,
+  Camera,
+  Upload,
+  RotateCcw,
+  Sliders,
+  ZoomIn,
+  Move,
+  Trash2,
 } from 'lucide-react';
 import { Student } from '../types';
 import { getAttendanceDaysSummary } from './StudentAttendanceModal';
@@ -21,6 +25,12 @@ interface StudentSettingsModalProps {
   familyId?: string;
   isTeacherMode: boolean;
   onUpdateStudentAttendanceDays: (studentId: string, days: number[]) => void;
+  onUpdateStudentPhoto?: (
+    studentId: string,
+    photoUrl: string,
+    photoPosition?: string,
+    photoZoom?: number
+  ) => void;
 }
 
 const WEEK_DAYS: { dayIndex: number; label: string; shortLabel: string }[] = [
@@ -41,8 +51,50 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
   familyId,
   isTeacherMode,
   onUpdateStudentAttendanceDays,
+  onUpdateStudentPhoto,
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Photo state
+  const [photoUrl, setPhotoUrl] = useState(student.photoUrl || '');
+  
+  // Parse initial position e.g. "50% 20%"
+  const initialPos = (() => {
+    if (student.photoPosition) {
+      const parts = student.photoPosition.split(' ');
+      if (parts.length === 2) {
+        const x = parseInt(parts[0], 10);
+        const y = parseInt(parts[1], 10);
+        return {
+          x: isNaN(x) ? 50 : x,
+          y: isNaN(y) ? 20 : y,
+        };
+      }
+    }
+    return { x: 50, y: 20 };
+  })();
+
+  const [posX, setPosX] = useState(initialPos.x);
+  const [posY, setPosY] = useState(initialPos.y);
+  const [zoom, setZoom] = useState(student.photoZoom || 1.0);
+  const [showPhotoControls, setShowPhotoControls] = useState(false);
+
+  // Synchronize when student changes
+  useEffect(() => {
+    setPhotoUrl(student.photoUrl || '');
+    if (student.photoPosition) {
+      const parts = student.photoPosition.split(' ');
+      if (parts.length === 2) {
+        setPosX(parseInt(parts[0], 10) || 50);
+        setPosY(parseInt(parts[1], 10) || 20);
+      }
+    } else {
+      setPosX(50);
+      setPosY(20);
+    }
+    setZoom(student.photoZoom || 1.0);
+  }, [student]);
 
   // Close on Escape key press
   useEffect(() => {
@@ -60,7 +112,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
   const handleToggleDay = (dayIndex: number) => {
     let updated: number[];
     if (studentAttendanceDays.includes(dayIndex)) {
-      if (studentAttendanceDays.length <= 1) return; // Keep at least one day
+      if (studentAttendanceDays.length <= 1) return;
       updated = studentAttendanceDays.filter((d) => d !== dayIndex);
     } else {
       updated = [...studentAttendanceDays, dayIndex].sort((a, b) => a - b);
@@ -72,11 +124,11 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     onUpdateStudentAttendanceDays(student.id, days);
   };
 
+  // Direct Student Link
   const getShareUrl = () => {
-    if (!familyId) return window.location.href;
     const url = new URL(window.location.origin + window.location.pathname);
-    url.searchParams.set('fam', familyId);
-    url.searchParams.set('st', student.id);
+    if (familyId) url.searchParams.set('fam', familyId);
+    url.searchParams.set('student', student.id);
     return url.toString();
   };
 
@@ -104,6 +156,41 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     }
   };
 
+  // Photo handlers
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const result = loadEvt.target?.result as string;
+      if (result) {
+        setPhotoUrl(result);
+        setShowPhotoControls(true);
+        onUpdateStudentPhoto?.(student.id, result, `${posX}% ${posY}%`, zoom);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpdatePositionAndZoom = (newX: number, newY: number, newZoom: number) => {
+    setPosX(newX);
+    setPosY(newY);
+    setZoom(newZoom);
+    if (photoUrl) {
+      onUpdateStudentPhoto?.(student.id, photoUrl, `${newX}% ${newY}%`, newZoom);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoUrl('');
+    setPosX(50);
+    setPosY(20);
+    setZoom(1.0);
+    setShowPhotoControls(false);
+    onUpdateStudentPhoto?.(student.id, '', '50% 20%', 1.0);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -123,7 +210,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
             className="fixed inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
           />
 
-          {/* Modal Card / Separate Page */}
+          {/* Modal Card */}
           <motion.div
             id="student-settings-modal-card"
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -132,15 +219,27 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
             transition={{ type: 'spring', damping: 26, stiffness: 300 }}
             className="relative w-full max-w-md bg-[#FAF6EE] text-[#1F2A3D] rounded-3xl shadow-2xl border border-[#B8860B]/30 overflow-hidden flex flex-col my-auto z-10 max-h-[92vh]"
           >
-            {/* Header: Title + Student Badge + Close Button */}
+            {/* Header */}
             <div className="bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] px-5 py-3.5 flex items-center justify-between border-b border-[#B8860B]/40 shadow-sm shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                {/* Student Avatar */}
+                {/* Student Avatar / Photo Thumbnail */}
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-sans font-bold text-base shadow-md shrink-0 border-2 border-[#B8860B]"
+                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-white font-sans font-bold text-base shadow-md shrink-0 border-2 border-[#B8860B]"
                   style={{ backgroundColor: student.color || '#0E5C56' }}
                 >
-                  {student.name.charAt(0)}
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt={student.name}
+                      className="w-full h-full object-cover"
+                      style={{
+                        objectPosition: `${posX}% ${posY}%`,
+                        transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                      }}
+                    />
+                  ) : (
+                    student.name.charAt(0)
+                  )}
                 </div>
 
                 <div className="min-w-0">
@@ -153,7 +252,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-[#B8860B] font-sans truncate">
-                    {familyName} • أيام الحضور ورابط المشاركة
+                    {familyName} • الصورة الشخصية وأيام الحضور
                   </p>
                 </div>
               </div>
@@ -170,10 +269,187 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </button>
             </div>
 
-            {/* Scrollable Content: The exact 2 sections requested */}
+            {/* Scrollable Content */}
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 no-scrollbar">
               {/* =========================================================================
-                  القسم الأول: الإعدادات (أيام الحضور)
+                  القسم الأول: صورة الطالب وتوسيطها في الإطار
+                 ========================================================================= */}
+              <section id="settings-section-photo" className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[#0E5C56]">
+                    <Camera className="w-4.5 h-4.5 text-[#B8860B]" />
+                    <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
+                      صورة الطالب الشخصية
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#0E5C56] bg-[#0E5C56]/15 px-2.5 py-0.5 rounded-full">
+                    معاينة حية وتوسيط
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3.5">
+                  {/* Portrait Live Preview & Upload Action */}
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {/* Live Portrait Frame Preview */}
+                    <div className="w-32 h-40 sm:w-36 sm:h-44 bg-white rounded-[22px] border-2 border-[#B8860B]/40 overflow-hidden shadow-sm flex flex-col shrink-0">
+                      <div className="relative flex-1 bg-gradient-to-b from-[#FAF6EE] to-[#EAE0CA] overflow-hidden flex items-center justify-center">
+                        {photoUrl ? (
+                          <img
+                            src={photoUrl}
+                            alt={student.name}
+                            className="w-full h-full object-cover transition-all"
+                            style={{
+                              objectPosition: `${posX}% ${posY}%`,
+                              transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex flex-col items-center justify-center text-white"
+                            style={{
+                              background: `linear-gradient(135deg, ${student.color || '#0E5C56'}dd, ${student.color || '#0E5C56'})`,
+                            }}
+                          >
+                            <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xl font-bold font-sans shadow-inner">
+                              {student.name.charAt(0)}
+                            </div>
+                            <span className="text-[11px] text-white/90 font-serif mt-1">
+                              {student.arabicName || student.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="py-1.5 px-1 text-center bg-white border-t border-amber-100/60">
+                        <span className="font-bold text-xs text-[#B8860B] block truncate">
+                          {student.name}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Controls & Upload Button */}
+                    <div className="flex-1 space-y-2.5 w-full">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-2.5 px-3 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98"
+                      >
+                        <Upload className="w-4 h-4 text-[#B8860B]" />
+                        <span>اختيار صورة من الجهاز / الجوال</span>
+                      </button>
+
+                      {photoUrl && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowPhotoControls(!showPhotoControls)}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-[#FAF6EE] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Sliders className="w-3.5 h-3.5 text-[#B8860B]" />
+                            <span>{showPhotoControls ? 'إخفاء الضبط' : 'ضبط التوسيط والتكبير'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            title="إزالة الصورة والرجوع للشعار الافتراضي"
+                            className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-[#5B6478] leading-relaxed">
+                        اختر صورة مناسبة للطالب، ثم اضبط موضع الوجه في الإطار ليظهر بدقة على الواجهة الرئيسية.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Centering & Zoom Adjusters */}
+                  {(showPhotoControls || photoUrl) && (
+                    <div className="bg-[#FAF6EE] p-3 rounded-xl border border-[#B8860B]/20 space-y-3">
+                      {/* Vertical Centering (Y-axis) */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-[#0E5C56] flex items-center gap-1">
+                            <Move className="w-3.5 h-3.5 text-[#B8860B]" />
+                            توسيط رأسي (أعلى / أسفل):
+                          </span>
+                          <span className="font-mono text-[#5B6478] font-semibold">{posY}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={posY}
+                          onChange={(e) =>
+                            handleUpdatePositionAndZoom(posX, parseInt(e.target.value, 10), zoom)
+                          }
+                          className="w-full accent-[#0E5C56] cursor-pointer"
+                        />
+                        <div className="flex items-center justify-between text-[10px] text-[#5B6478]">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePositionAndZoom(posX, 10, zoom)}
+                            className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
+                          >
+                            أعلى (10%)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePositionAndZoom(posX, 30, zoom)}
+                            className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
+                          >
+                            وسط أعلى (30%)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePositionAndZoom(posX, 50, zoom)}
+                            className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
+                          >
+                            وسط (50%)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Zoom Slider */}
+                      <div className="space-y-1 pt-1 border-t border-[#B8860B]/15">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-[#0E5C56] flex items-center gap-1">
+                            <ZoomIn className="w-3.5 h-3.5 text-[#B8860B]" />
+                            تكبير وتصغير الصورة:
+                          </span>
+                          <span className="font-mono text-[#5B6478] font-semibold">
+                            {zoom.toFixed(1)}x
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="2.5"
+                          step="0.1"
+                          value={zoom}
+                          onChange={(e) =>
+                            handleUpdatePositionAndZoom(posX, posY, parseFloat(e.target.value))
+                          }
+                          className="w-full accent-[#0E5C56] cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* =========================================================================
+                  القسم الثاني: الإعدادات (أيام الحضور)
                  ========================================================================= */}
               <section id="settings-section-attendance" className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -280,24 +556,24 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </section>
 
               {/* =========================================================================
-                  القسم الثاني: رابط المشاركة
+                  القسم الثالث: رابط المشاركة المباشر للطالب
                  ========================================================================= */}
               <section id="settings-section-share-link" className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <Link2 className="w-4.5 h-4.5 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      رابط المشاركة
+                      رابط صفحة الطالب المباشر
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold text-[#16A34A] bg-[#16A34A]/15 px-2.5 py-0.5 rounded-full">
-                    مباشر للطالب
+                    مباشر لـ {student.name}
                   </span>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3">
                   <p className="text-[11.5px] sm:text-xs text-[#5B6478] font-medium leading-relaxed">
-                    شارك هذا الرابط مع الطالب أو ولي الأمر لمتابعة جدول الواجبات والتقييمات مباشرة:
+                    عند فتح هذا الرابط، يفتح صفحة <strong>{student.name} ({student.arabicName || ''})</strong> مباشرة، مع إمكانية التنقل بين إخوته في نفس الأسرة:
                   </p>
 
                   {/* URL Display and Copy Button */}
@@ -347,7 +623,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </section>
             </div>
 
-            {/* Modal Footer: Done/Close Button */}
+            {/* Modal Footer */}
             <div className="p-3 sm:p-4 bg-[#F5EFDD] border-t border-[#B8860B]/20 flex items-center justify-between shrink-0">
               <span className="text-[11px] text-[#5B6478] font-medium">
                 يتم حفظ التغييرات تلقائياً
@@ -358,7 +634,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                 onClick={onClose}
                 className="px-5 py-2 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all cursor-pointer shadow-xs"
               >
-                إغلاق
+                تم
               </button>
             </div>
           </motion.div>

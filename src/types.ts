@@ -29,12 +29,16 @@ export interface Student {
   arabicName?: string;
   color: string; // hex, used as avatar/accent
   photoUrl?: string;
+  photoPosition?: string; // e.g. "50% 30%" or "center"
+  photoZoom?: number; // e.g. 1.0 - 2.0
   entries: Entry[];
   manualWeeklyStars?: ManualWeeklyStars[];
   surahRatings?: Record<number, SurahMemorizationStatus>; // Surah number (1-114) -> status
   attendanceDays?: number[]; // [0, 1, 2, 3, 4, 5, 6] where 0=Sun, 1=Mon, ..., 6=Sat
   tilawaSurah?: number; // Surah number (1-114) for current Tilawa
   tilawaAyah?: number; // Current Ayah number within the selected Surah
+  memorizationFocus?: string; // Things student needs to focus on in memorization
+  motivationalMessage?: string; // Teacher custom motivational message displayed in the weekly star banner
 }
 
 export interface Family {

@@ -493,8 +493,8 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
     },
     {
       id: 'family-3',
-      name: 'Yusuf + Hayaa',
-      studentIds: ['student-yusuf', 'student-hayaa'],
+      name: 'Hayaa + Yusuf',
+      studentIds: ['student-hayaa', 'student-yusuf'],
     },
   ];
 

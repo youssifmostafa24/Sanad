@@ -21,6 +21,7 @@ interface HomeworkRowProps {
   selectedMonthPrefix?: string;
   studentSurahRatings?: Record<number, SurahMemorizationStatus>;
   showOnTime?: boolean;
+  onOpenStudentNotes?: () => void;
   onUpdateEntry: (updated: Entry) => void;
   onDeleteEntry: (entryId: string) => void;
   onDuplicateEntry: (entry: Entry) => void;
@@ -35,6 +36,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   selectedMonthPrefix,
   studentSurahRatings,
   showOnTime = false,
+  onOpenStudentNotes,
   onUpdateEntry,
   onDeleteEntry,
   onDuplicateEntry,
@@ -178,7 +180,20 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
       {/* Right Card: Day's homework portions */}
       <div
         id={`content-card-${entry.id}`}
-        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1.5 px-2.5 sm:py-2 sm:px-3 flex flex-col justify-center relative transition-colors ${cardBorder}`}
+        onClick={(e) => {
+          // If click was on interactive buttons/inputs/pickers, don't open modal
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, select, textarea, [data-interactive="true"]')) {
+            return;
+          }
+          onOpenStudentNotes?.();
+        }}
+        title={
+          isTeacherMode
+            ? 'Click blank space to edit focus notes & recitation'
+            : 'Click to view memorization focus notes & recitation'
+        }
+        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1.5 px-2.5 sm:py-2 sm:px-3 flex flex-col justify-center relative transition-all ${cardBorder} hover:shadow-xs cursor-pointer`}
       >
         {/* Portion 1: Hifz Homework */}
         <div

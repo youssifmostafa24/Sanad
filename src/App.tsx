@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Family, Student, Entry, SurahMemorizationStatus } from './types';
+import { Family, Student, Entry, SurahMemorizationStatus, GradeValue } from './types';
 import { getInitialData } from './data/seedData';
 import {
   formatLocalDate,
@@ -20,10 +20,12 @@ import { MainPortal } from './components/MainPortal';
 import { StudentAttendanceModal } from './components/StudentAttendanceModal';
 import { SurahProgressModal } from './components/SurahProgressModal';
 import { StudentSettingsModal } from './components/StudentSettingsModal';
+import { StudentFocusNotesModal } from './components/StudentFocusNotesModal';
+import { VoiceHomeworkModal } from './components/VoiceHomeworkModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { isTeacherAuthenticatedStored, setTeacherAuthenticatedStored } from './utils/authUtils';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
-import { BookOpen, ArrowDown } from 'lucide-react';
+import { BookOpen, ArrowDown, ChevronRight } from 'lucide-react';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
   fetchAllDataFromSupabase,
@@ -33,7 +35,10 @@ import {
   updateStudentTilawaInSupabase,
   updateStudentAttendanceInSupabase,
   updateFamilyAttendanceInSupabase,
+  updateStudentPhotoInSupabase,
+  updateStudentFocusInSupabase,
   subscribeToSupabaseChanges,
+  syncAllLocalDataToSupabase,
 } from './services/supabaseService';
 
 const STORAGE_KEY = 'sanad_homework_data_v5';
@@ -46,6 +51,30 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed?.families?.length >= 3 && parsed?.students?.length >= 8) {
+          // Sanitize families: exclude any 4th family (e.g. Mostafa/Samah)
+          const filteredFamilies = parsed.families
+            .filter((fam: Family) => {
+              const n = fam.name.toLowerCase();
+              return (
+                !n.includes('mostafa') &&
+                !n.includes('samah') &&
+                !n.includes('مصطفى') &&
+                !n.includes('مصطفي') &&
+                !n.includes('سماح')
+              );
+            })
+            .slice(0, 3)
+            .map((fam: Family) => {
+              if (fam.id === 'family-3') {
+                return {
+                  ...fam,
+                  name: 'Hayaa + Yusuf',
+                  studentIds: ['student-hayaa', 'student-yusuf'],
+                };
+              }
+              return fam;
+            });
+
           const normalizedStudents = parsed.students.map((st: Student) => ({
             ...st,
             entries: (st.entries || []).map((e: Entry) => ({
@@ -54,7 +83,7 @@ export default function App() {
               murajaaText: normalizeQuranHomeworkText(e.murajaaText),
             })),
           }));
-          return { families: parsed.families, students: normalizedStudents };
+          return { families: filteredFamilies, students: normalizedStudents };
         }
       }
     } catch {
@@ -83,7 +112,39 @@ export default function App() {
       try {
         const remoteData = await fetchAllDataFromSupabase();
         if (remoteData && isMounted && remoteData.families.length > 0) {
-          setData(remoteData);
+          // Merge remote data with existing data:
+          // If a student in remoteData has 0 entries but exists in local data with entries (like Ibrahim, Sulaymn, Yusuf),
+          // preserve those entries so they never disappear!
+          setData((prev) => {
+            const mergedStudents = remoteData.students.map((remoteSt) => {
+              const localSt = prev.students.find((s) => s.id === remoteSt.id);
+              if (remoteSt.entries && remoteSt.entries.length > 0) {
+                // Remote has entries, use them (or merge unique by id/date)
+                if (localSt && localSt.entries && localSt.entries.length > 0) {
+                  const entryIds = new Set(remoteSt.entries.map((e) => e.id));
+                  const missingFromRemote = localSt.entries.filter((e) => !entryIds.has(e.id));
+                  return {
+                    ...remoteSt,
+                    entries: [...remoteSt.entries, ...missingFromRemote].sort((a, b) => b.date.localeCompare(a.date)),
+                  };
+                }
+                return remoteSt;
+              }
+              // If remote has 0 entries, keep local entries
+              if (localSt && localSt.entries && localSt.entries.length > 0) {
+                return {
+                  ...remoteSt,
+                  entries: localSt.entries,
+                };
+              }
+              return remoteSt;
+            });
+
+            return {
+              families: remoteData.families,
+              students: mergedStudents,
+            };
+          });
           setIsSupabaseConnected(true);
         }
       } catch (err) {
@@ -98,7 +159,30 @@ export default function App() {
       try {
         const remoteData = await fetchAllDataFromSupabase();
         if (remoteData && isMounted && remoteData.families.length > 0) {
-          setData(remoteData);
+          setData((prev) => {
+            const mergedStudents = remoteData.students.map((remoteSt) => {
+              const localSt = prev.students.find((s) => s.id === remoteSt.id);
+              if (remoteSt.entries && remoteSt.entries.length > 0) {
+                if (localSt && localSt.entries && localSt.entries.length > 0) {
+                  const entryIds = new Set(remoteSt.entries.map((e) => e.id));
+                  const missingFromRemote = localSt.entries.filter((e) => !entryIds.has(e.id));
+                  return {
+                    ...remoteSt,
+                    entries: [...remoteSt.entries, ...missingFromRemote].sort((a, b) => b.date.localeCompare(a.date)),
+                  };
+                }
+                return remoteSt;
+              }
+              if (localSt && localSt.entries && localSt.entries.length > 0) {
+                return { ...remoteSt, entries: localSt.entries };
+              }
+              return remoteSt;
+            });
+            return {
+              families: remoteData.families,
+              students: mergedStudents,
+            };
+          });
         }
       } catch (err) {
         console.warn('Realtime fetch error:', err);
@@ -111,9 +195,16 @@ export default function App() {
     };
   }, []);
 
-  // Read URL query parameter for family (?fam=<familyId>)
+  // Read URL query parameter for family (?fam=<familyId>) or student (?student=<id> / ?st=<id>)
   const [activeFamilyId, setActiveFamilyId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
+    const studentParam = params.get('student') || params.get('st');
+    if (studentParam) {
+      const famWithStudent = data.families.find((f) => f.studentIds.includes(studentParam));
+      if (famWithStudent) {
+        return famWithStudent.id;
+      }
+    }
     const famParam = params.get('fam');
     if (famParam && data.families.some((f) => f.id === famParam)) {
       return famParam;
@@ -124,7 +215,8 @@ export default function App() {
   // View state: 'portal' (Master 3-families landing portal) vs 'family' (individual family page)
   const [currentView, setCurrentView] = useState<'portal' | 'family'>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('fam') ? 'family' : 'portal';
+    const hasStudentOrFam = params.get('fam') || params.get('student') || params.get('st');
+    return hasStudentOrFam ? 'family' : 'portal';
   });
 
   // Persistent Teacher Authentication state (Password: 122333 / ١٢٢٣٣٣)
@@ -163,6 +255,12 @@ export default function App() {
   // Slide-out sidebar drawer state for student pages navigation
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
+  // Student Memorization Focus & Recitation Notes Modal State
+  const [isFocusNotesModalOpen, setIsFocusNotesModalOpen] = useState<boolean>(false);
+
+  // Smart Voice Dictation Modal State
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
+
   // Header auto-hide on scroll-down, show on scroll-up
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
   const lastScrollYRef = useRef<number>(0);
@@ -181,6 +279,11 @@ export default function App() {
 
   // Active student state
   const [activeStudentId, setActiveStudentId] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const studentParam = params.get('student') || params.get('st');
+    if (studentParam && data.students.some((s) => s.id === studentParam)) {
+      return studentParam;
+    }
     return visibleStudents[0]?.id || data.students[0]?.id || '';
   });
 
@@ -353,7 +456,7 @@ export default function App() {
   // Ref to target the latest homework entry in view
   const latestHomeworkRef = useRef<HTMLDivElement | null>(null);
 
-  // Whenever the active student changes, automatically set the selected month to the month of the student's latest homework
+  // Whenever the active student changes (or their entries update from Supabase), automatically set the selected month to the month of the student's latest homework
   useEffect(() => {
     if (activeStudent?.entries && activeStudent.entries.length > 0) {
       const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
@@ -370,7 +473,7 @@ export default function App() {
         }
       }
     }
-  }, [activeStudentId]);
+  }, [activeStudentId, activeStudent?.entries?.length]);
 
   // Reset scroll to top whenever the student or month changes (normal natural scroll behavior)
   useEffect(() => {
@@ -686,6 +789,123 @@ export default function App() {
     }
   };
 
+  // Student Profile Photo & Framing Position Handler
+  const handleUpdateStudentPhoto = (
+    studentId: string,
+    photoUrl: string,
+    photoPosition: string = '50% 20%',
+    photoZoom: number = 1.0
+  ) => {
+    setData((prev) => ({
+      ...prev,
+      students: prev.students.map((st) =>
+        st.id === studentId
+          ? {
+              ...st,
+              photoUrl: photoUrl.trim() || undefined,
+              photoPosition,
+              photoZoom,
+            }
+          : st
+      ),
+    }));
+
+    if (isSupabaseConfigured()) {
+      updateStudentPhotoInSupabase(studentId, photoUrl, photoPosition, photoZoom).catch((err) =>
+        console.warn('Supabase photo update error:', err)
+      );
+    }
+  };
+
+  // Student Memorization Focus Notes & Recitation Bookmark Handler
+  const handleSaveFocusNotes = (
+    studentId: string,
+    memorizationFocus: string,
+    tilawaSurah: number,
+    tilawaAyah: number,
+    motivationalMessage?: string
+  ) => {
+    setData((prev) => ({
+      ...prev,
+      students: prev.students.map((st) =>
+        st.id === studentId
+          ? {
+              ...st,
+              memorizationFocus: memorizationFocus.trim() || undefined,
+              tilawaSurah,
+              tilawaAyah,
+              motivationalMessage:
+                motivationalMessage !== undefined
+                  ? motivationalMessage.trim() || undefined
+                  : st.motivationalMessage,
+            }
+          : st
+      ),
+    }));
+
+    if (isSupabaseConfigured()) {
+      updateStudentFocusInSupabase(
+        studentId,
+        memorizationFocus,
+        tilawaSurah,
+        tilawaAyah,
+        motivationalMessage
+      ).catch((err) => console.warn('Supabase focus update error:', err));
+    }
+  };
+
+  // Smart Voice Dictation & AI Homework Handler
+  const handleSaveVoiceHomework = (
+    studentId: string,
+    entryDate: string,
+    hifz: string,
+    revision: string,
+    grade?: GradeValue,
+    memorizationFocus?: string,
+    tilawaSurah?: number,
+    tilawaAyah?: number
+  ) => {
+    // 1. If hifz or revision is present, add new homework entry
+    if (hifz || revision) {
+      const newEntry: Entry = {
+        id: `entry-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        date: entryDate,
+        hifzText: hifz || '—',
+        hifzGrade: grade ?? null,
+        murajaaText: revision || '',
+        murajaaGrade: null,
+      };
+
+      setData((prev) => ({
+        ...prev,
+        students: prev.students.map((st) =>
+          st.id === studentId
+            ? {
+                ...st,
+                entries: [newEntry, ...st.entries],
+              }
+            : st
+        ),
+      }));
+
+      if (isSupabaseConfigured()) {
+        upsertEntryInSupabase(studentId, newEntry).catch((err) =>
+          console.warn('Supabase entry upsert error:', err)
+        );
+      }
+    }
+
+    // 2. Update focus notes and tilawa bookmark
+    if (memorizationFocus !== undefined || tilawaSurah !== undefined) {
+      handleSaveFocusNotes(
+        studentId,
+        memorizationFocus !== undefined ? memorizationFocus : (activeStudent?.memorizationFocus || ''),
+        tilawaSurah !== undefined ? tilawaSurah : (activeStudent?.tilawaSurah || 18),
+        tilawaAyah !== undefined ? tilawaAyah : (activeStudent?.tilawaAyah || 1)
+      );
+    }
+  };
+
   const handleResetData = () => {
     const initial = getInitialData();
     setData(initial);
@@ -696,16 +916,32 @@ export default function App() {
   // If in portal view, render the 3-Family Master Portal
   if (currentView === 'portal') {
     return (
-      <MainPortal
-        families={data.families}
-        students={data.students}
-        onSelectFamilyAndStudent={handleSelectFamilyAndStudent}
-        isTeacherAuthenticated={isTeacherAuthenticated}
-        onTeacherLoginSuccess={handleTeacherLoginSuccess}
-        onTeacherLogout={handleTeacherLogout}
-        isTeacherMode={isTeacherMode}
-        onToggleTeacherMode={handleToggleTeacherMode}
-      />
+      <>
+        <MainPortal
+          families={data.families}
+          students={data.students}
+          onSelectFamilyAndStudent={handleSelectFamilyAndStudent}
+          isTeacherAuthenticated={isTeacherAuthenticated}
+          onTeacherLoginSuccess={handleTeacherLoginSuccess}
+          onTeacherLogout={handleTeacherLogout}
+          isTeacherMode={isTeacherMode}
+          onToggleTeacherMode={handleToggleTeacherMode}
+          onOpenStudentSettings={(st) => setSettingsStudentId(st.id)}
+          onSyncToSupabase={() => syncAllLocalDataToSupabase(data)}
+        />
+        {settingsStudent && (
+          <StudentSettingsModal
+            isOpen={Boolean(settingsStudent)}
+            onClose={() => setSettingsStudentId(null)}
+            student={settingsStudent}
+            familyName={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.name}
+            familyId={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id}
+            isTeacherMode={isTeacherMode}
+            onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
+            onUpdateStudentPhoto={handleUpdateStudentPhoto}
+          />
+        )}
+      </>
     );
   }
 
@@ -730,6 +966,7 @@ export default function App() {
         onOpenPortal={handleOpenPortal}
         isTeacherAuthenticated={isTeacherAuthenticated}
         onTeacherLoginSuccess={handleTeacherLoginSuccess}
+        onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -779,8 +1016,23 @@ export default function App() {
               >
                 <BookOpen className="w-7 h-7 mx-auto text-[#B8860B]/60 mb-1.5" />
                 <h3 className="font-sans font-bold text-xs sm:text-sm text-[#0E5C56]">
-                  لا توجد واجبات مسجلة لهذا الشهر
+                  لا توجد واجبات مسجلة لشهر {selectedMonthLabel}
                 </h3>
+                {activeStudent && activeStudent.entries && activeStudent.entries.length > 0 && (
+                  <div className="mt-2.5">
+                    <p className="text-xs text-[#5B6478] mb-2 font-sans">
+                      يوجد {activeStudent.entries.length} واجباً مسجلاً للطالب في أشهر سابقة
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleScrollToTodayHomework}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0E5C56] text-[#F5EFDD] text-xs font-bold hover:bg-[#0B4A45] active:scale-95 transition-all cursor-pointer shadow-xs"
+                    >
+                      <span>الانتقال لآخر شهر به واجبات</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               (() => {
@@ -810,10 +1062,13 @@ export default function App() {
                     activeStudent?.entries?.some((e) => e.date >= nextSaturdayStr)
                   );
 
+                  // Show star band at the end of each week in the month:
+                  // either when followed by subsequent week entries, OR if it is the latest entry of the current active week!
+                  const isLatestEntryOverall = idx === monthEntries.length - 1;
                   const shouldShowStarBand =
                     isWeekEndingInCurrentMonth &&
                     isLastEntryOfWeekInMonth &&
-                    hasSubsequentSaturdayEntry;
+                    (hasSubsequentSaturdayEntry || isLatestEntryOverall);
 
                   const weekRating =
                     shouldShowStarBand && activeStudent
@@ -840,6 +1095,7 @@ export default function App() {
                         selectedMonthPrefix={selectedMonthPrefix}
                         studentSurahRatings={activeStudent?.surahRatings}
                         showOnTime={isYusuf}
+                        onOpenStudentNotes={() => setIsFocusNotesModalOpen(true)}
                         onUpdateEntry={handleUpdateEntry}
                         onDeleteEntry={handleDeleteEntry}
                         onDuplicateEntry={handleDuplicateEntry}
@@ -852,6 +1108,18 @@ export default function App() {
                           key={`week-stars-${weekEndThursday}`}
                           stars={weekRating.stars}
                           idPrefix={`week-stars-${weekEndThursday}`}
+                          title="This week so far"
+                          subtitle={activeStudent.motivationalMessage}
+                          isTeacherMode={isTeacherMode}
+                          onUpdateMotivationalMessage={(newMsg) => {
+                            handleSaveFocusNotes(
+                              activeStudent.id,
+                              activeStudent.memorizationFocus || '',
+                              activeStudent.tilawaSurah || 18,
+                              activeStudent.tilawaAyah || 1,
+                              newMsg
+                            );
+                          }}
                         />
                       )}
                     </div>
@@ -860,11 +1128,12 @@ export default function App() {
               })()
             )}
 
-            {/* Teacher Mode: Single "Repeat +" Button as requested */}
+            {/* Teacher Mode: Single "Repeat +" Button & Voice AI Button */}
             {isTeacherMode && (
               <AddHomeworkRow
                 lastEntry={mostRecentStudentEntry}
                 onRepeatLastEntry={handleRepeatLastHomework}
+                onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
               />
             )}
           </div>
@@ -890,11 +1159,36 @@ export default function App() {
         onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
         onOpenSurahProgress={(st) => setSelectedSurahStudent(st)}
         onOpenPortal={handleOpenPortal}
+        onOpenFocusNotes={() => {
+          setIsSidebarOpen(false);
+          setIsFocusNotesModalOpen(true);
+        }}
         onOpenStudentSettings={(st) => {
           setIsSidebarOpen(false);
           setSettingsStudentId(st.id);
         }}
       />
+
+      {/* Smart Voice Dictation & AI Homework Modal */}
+      {activeStudent && (
+        <VoiceHomeworkModal
+          isOpen={isVoiceModalOpen}
+          onClose={() => setIsVoiceModalOpen(false)}
+          student={activeStudent}
+          onSaveNewHomework={handleSaveVoiceHomework}
+        />
+      )}
+
+      {/* Student Focus Areas & Recitation Bookmark Modal */}
+      {activeStudent && (
+        <StudentFocusNotesModal
+          isOpen={isFocusNotesModalOpen}
+          onClose={() => setIsFocusNotesModalOpen(false)}
+          student={activeStudent}
+          isTeacherMode={isTeacherMode}
+          onSaveFocusNotes={handleSaveFocusNotes}
+        />
+      )}
 
       {/* Dedicated Separate Page / Modal for Student Settings (Attendance Days & Direct Share Link) */}
       {settingsStudent && (
@@ -902,10 +1196,11 @@ export default function App() {
           isOpen={Boolean(settingsStudent)}
           onClose={() => setSettingsStudentId(null)}
           student={settingsStudent}
-          familyName={activeFamily?.name}
-          familyId={activeFamily?.id}
+          familyName={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.name || activeFamily?.name}
+          familyId={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id || activeFamily?.id}
           isTeacherMode={isTeacherMode}
           onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
+          onUpdateStudentPhoto={handleUpdateStudentPhoto}
         />
       )}
 
