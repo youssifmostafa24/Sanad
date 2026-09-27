@@ -1,118 +1,104 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
-  Calendar,
-  Link2,
-  Share2,
-  Check,
   Camera,
   Upload,
-  RotateCcw,
   Sliders,
-  ZoomIn,
   Move,
+  ZoomIn,
   Trash2,
+  Calendar,
+  Share2,
+  Check,
+  Link2,
+  AlertTriangle,
+  RotateCw,
+  RefreshCw,
+  Lock,
 } from 'lucide-react';
 import { Student } from '../types';
-import { getAttendanceDaysSummary } from './StudentAttendanceModal';
+import { WEEK_DAYS, getAttendanceDaysSummary } from './StudentAttendanceModal';
 
 interface StudentSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  student: Student;
+  student: Student | null;
   familyName?: string;
   familyId?: string;
-  isTeacherMode: boolean;
+  onUpdateStudentPhoto?: (studentId: string, photoUrl: string | undefined, position?: string, zoom?: number) => void;
   onUpdateStudentAttendanceDays: (studentId: string, days: number[]) => void;
-  onUpdateStudentPhoto?: (
-    studentId: string,
-    photoUrl: string,
-    photoPosition?: string,
-    photoZoom?: number
-  ) => void;
+  onUpdateStudentShareToken?: (studentId: string, newToken: string) => void;
 }
-
-const WEEK_DAYS: { dayIndex: number; label: string; shortLabel: string }[] = [
-  { dayIndex: 6, label: 'السبت', shortLabel: 'سبت' },
-  { dayIndex: 0, label: 'الأحد', shortLabel: 'أحد' },
-  { dayIndex: 1, label: 'الإثنين', shortLabel: 'إثنين' },
-  { dayIndex: 2, label: 'الثلاثاء', shortLabel: 'ثلاثاء' },
-  { dayIndex: 3, label: 'الأربعاء', shortLabel: 'أربعاء' },
-  { dayIndex: 4, label: 'الخميس', shortLabel: 'خميس' },
-  { dayIndex: 5, label: 'الجمعة', shortLabel: 'جمعة' },
-];
 
 export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
   isOpen,
   onClose,
   student,
-  familyName = 'الأسرة',
+  familyName = 'Family',
   familyId,
-  isTeacherMode,
-  onUpdateStudentAttendanceDays,
   onUpdateStudentPhoto,
+  onUpdateStudentAttendanceDays,
+  onUpdateStudentShareToken,
 }) => {
-  const [copiedLink, setCopiedLink] = useState(false);
+  if (!student) return null;
+
+  // Photo settings local state
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(student.photoUrl);
+  const [showPhotoControls, setShowPhotoControls] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [shareToken, setShareToken] = useState<string>(student.shareToken || student.id.slice(0, 8));
+  const [tokenNotice, setTokenNotice] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  // Parse position e.g. "50% 30%"
+  const initialPos = student.photoPosition || 'center 20%';
+  const parsePos = (posStr: string): { x: number; y: number } => {
+    const parts = posStr.split(' ');
+    const x = parseInt(parts[0], 10);
+    const y = parseInt(parts[1], 10);
+    return {
+      x: isNaN(x) ? 50 : x,
+      y: isNaN(y) ? 20 : y,
+    };
+  };
+
+  const { x: defaultX, y: defaultY } = parsePos(initialPos);
+  const [posX, setPosX] = useState<number>(defaultX);
+  const [posY, setPosY] = useState<number>(defaultY);
+  const [zoom, setZoom] = useState<number>(student.photoZoom || 1);
+
+  // Dragging gesture state for direct touch/mouse repositioning
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number }>({
+    clientX: 0,
+    clientY: 0,
+    startX: 50,
+    startY: 20,
+  });
+
+  const previewBoxRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Photo state
-  const [photoUrl, setPhotoUrl] = useState(student.photoUrl || '');
-  
-  // Parse initial position e.g. "50% 20%"
-  const initialPos = (() => {
-    if (student.photoPosition) {
-      const parts = student.photoPosition.split(' ');
-      if (parts.length === 2) {
-        const x = parseInt(parts[0], 10);
-        const y = parseInt(parts[1], 10);
-        return {
-          x: isNaN(x) ? 50 : x,
-          y: isNaN(y) ? 20 : y,
-        };
-      }
-    }
-    return { x: 50, y: 20 };
-  })();
-
-  const [posX, setPosX] = useState(initialPos.x);
-  const [posY, setPosY] = useState(initialPos.y);
-  const [zoom, setZoom] = useState(student.photoZoom || 1.0);
-  const [showPhotoControls, setShowPhotoControls] = useState(false);
-
-  // Synchronize when student changes
   useEffect(() => {
-    setPhotoUrl(student.photoUrl || '');
-    if (student.photoPosition) {
-      const parts = student.photoPosition.split(' ');
-      if (parts.length === 2) {
-        setPosX(parseInt(parts[0], 10) || 50);
-        setPosY(parseInt(parts[1], 10) || 20);
-      }
-    } else {
-      setPosX(50);
-      setPosY(20);
-    }
-    setZoom(student.photoZoom || 1.0);
+    setPhotoUrl(student.photoUrl);
+    const { x, y } = parsePos(student.photoPosition || 'center 20%');
+    setPosX(x);
+    setPosY(y);
+    setZoom(student.photoZoom || 1);
+    setShareToken(student.shareToken || student.id.slice(0, 8));
   }, [student]);
 
-  // Close on Escape key press
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
+  // Attendance days local state
   const studentAttendanceDays = student.attendanceDays || [1, 5];
 
   const handleToggleDay = (dayIndex: number) => {
     let updated: number[];
     if (studentAttendanceDays.includes(dayIndex)) {
-      if (studentAttendanceDays.length <= 1) return;
+      if (studentAttendanceDays.length <= 1) {
+        return; // Keep at least one day
+      }
       updated = studentAttendanceDays.filter((d) => d !== dayIndex);
     } else {
       updated = [...studentAttendanceDays, dayIndex].sort((a, b) => a - b);
@@ -124,11 +110,12 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     onUpdateStudentAttendanceDays(student.id, days);
   };
 
-  // Direct Student Link
+  // Direct Student Link with Token
   const getShareUrl = () => {
     const url = new URL(window.location.origin + window.location.pathname);
     if (familyId) url.searchParams.set('fam', familyId);
     url.searchParams.set('student', student.id);
+    if (shareToken) url.searchParams.set('token', shareToken);
     return url.toString();
   };
 
@@ -139,13 +126,23 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  const handleRegenerateToken = () => {
+    const newToken = Math.random().toString(36).substring(2, 10);
+    setShareToken(newToken);
+    if (onUpdateStudentShareToken) {
+      onUpdateStudentShareToken(student.id, newToken);
+    }
+    setTokenNotice('Token regenerated successfully! Previous link has been invalidated.');
+    setTimeout(() => setTokenNotice(null), 4500);
+  };
+
   const handleNativeShare = async () => {
     const url = getShareUrl();
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `جدول واجبات الطالب ${student.arabicName || student.name}`,
-          text: `متابعة جدول حفظ وتلاوة ${student.arabicName || student.name} في حلقة القرآن الكريم`,
+          title: `Homework tracker for ${student.name}`,
+          text: `Daily memorization and recitation tracker for ${student.name}`,
           url: url,
         });
       } catch {
@@ -156,103 +153,201 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     }
   };
 
-  // Photo handlers
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Client-side Image Compression via HTML5 Canvas
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+
+      reader.onerror = (err) => reject(err);
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas context unavailable'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Compress as JPEG quality 0.82
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(compressedBase64);
+      };
+
+      img.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Photo file upload with 8MB size check and client compression
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const result = loadEvt.target?.result as string;
-      if (result) {
-        setPhotoUrl(result);
-        setShowPhotoControls(true);
-        onUpdateStudentPhoto?.(student.id, result, `${posX}% ${posY}%`, zoom);
-      }
-    };
-    reader.readAsDataURL(file);
+    // Check size: Reject files > 8MB
+    const MAX_SIZE_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      setFileError('Image file is too large (over 8MB). Please choose a smaller photo.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    try {
+      setIsCompressing(true);
+      const compressedDataUrl = await compressImage(file);
+      setPhotoUrl(compressedDataUrl);
+      setShowPhotoControls(true);
+      onUpdateStudentPhoto?.(student.id, compressedDataUrl, `${posX}% ${posY}%`, zoom);
+    } catch {
+      setFileError('An error occurred while processing the photo. Please try another file.');
+    } finally {
+      setIsCompressing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleUpdatePositionAndZoom = (newX: number, newY: number, newZoom: number) => {
-    setPosX(newX);
-    setPosY(newY);
-    setZoom(newZoom);
+    const clampedX = Math.max(0, Math.min(100, Math.round(newX)));
+    const clampedY = Math.max(0, Math.min(100, Math.round(newY)));
+    const clampedZoom = Math.max(1.0, Math.min(2.5, Number(newZoom.toFixed(1))));
+
+    setPosX(clampedX);
+    setPosY(clampedY);
+    setZoom(clampedZoom);
+
     if (photoUrl) {
-      onUpdateStudentPhoto?.(student.id, photoUrl, `${newX}% ${newY}%`, newZoom);
+      onUpdateStudentPhoto?.(student.id, photoUrl, `${clampedX}% ${clampedY}%`, clampedZoom);
     }
   };
 
   const handleRemovePhoto = () => {
-    setPhotoUrl('');
-    setPosX(50);
-    setPosY(20);
-    setZoom(1.0);
+    setPhotoUrl(undefined);
     setShowPhotoControls(false);
-    onUpdateStudentPhoto?.(student.id, '', '50% 20%', 1.0);
+    onUpdateStudentPhoto?.(student.id, undefined);
+  };
+
+  // Direct Drag-to-Reposition Gesture Handlers on Live Frame
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!photoUrl) return;
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: posX,
+      startY: posY,
+    };
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current || !photoUrl) return;
+    const deltaX = (e.clientX - dragStartRef.current.clientX) * 0.4;
+    const deltaY = (e.clientY - dragStartRef.current.clientY) * 0.4;
+    const nextX = dragStartRef.current.startX - deltaX;
+    const nextY = dragStartRef.current.startY - deltaY;
+    handleUpdatePositionAndZoom(nextX, nextY, zoom);
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!photoUrl || e.touches.length !== 1) return;
+    isDraggingRef.current = true;
+    const touch = e.touches[0];
+    dragStartRef.current = {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      startX: posX,
+      startY: posY,
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingRef.current || !photoUrl || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const deltaX = (touch.clientX - dragStartRef.current.clientX) * 0.4;
+    const deltaY = (touch.clientY - dragStartRef.current.clientY) * 0.4;
+    const nextX = dragStartRef.current.startX - deltaX;
+    const nextY = dragStartRef.current.startY - deltaY;
+    handleUpdatePositionAndZoom(nextX, nextY, zoom);
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!photoUrl) return;
+    e.preventDefault();
+    const zoomDelta = e.deltaY < 0 ? 0.1 : -0.1;
+    handleUpdatePositionAndZoom(posX, posY, zoom + zoomDelta);
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div
-          id="student-settings-modal-overlay"
-          className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4"
-          dir="rtl"
+          id="student-settings-modal-backdrop"
+          className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none"
+          dir="ltr"
         >
-          {/* Backdrop */}
-          <motion.div
-            id="student-settings-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
-          />
-
           {/* Modal Card */}
           <motion.div
             id="student-settings-modal-card"
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            initial={{ opacity: 0, scale: 0.94, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-            className="relative w-full max-w-md bg-[#FAF6EE] text-[#1F2A3D] rounded-3xl shadow-2xl border border-[#B8860B]/30 overflow-hidden flex flex-col my-auto z-10 max-h-[92vh]"
+            exit={{ opacity: 0, scale: 0.94, y: 15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="w-full max-w-lg bg-[#FAF6EE] text-[#1F2A3D] rounded-3xl shadow-2xl border border-[#B8860B]/35 overflow-hidden flex flex-col max-h-[92vh]"
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] px-5 py-3.5 flex items-center justify-between border-b border-[#B8860B]/40 shadow-sm shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                {/* Student Avatar / Photo Thumbnail */}
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] px-5 py-4 flex items-center justify-between border-b border-[#B8860B]/40 shrink-0 shadow-sm">
+              <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-white font-sans font-bold text-base shadow-md shrink-0 border-2 border-[#B8860B]"
+                  className="w-10 h-10 rounded-full border-2 border-[#B8860B] flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0"
                   style={{ backgroundColor: student.color || '#0E5C56' }}
                 >
-                  {photoUrl ? (
-                    <img
-                      src={photoUrl}
-                      alt={student.name}
-                      className="w-full h-full object-cover"
-                      style={{
-                        objectPosition: `${posX}% ${posY}%`,
-                        transform: zoom !== 1 ? `scale(${zoom})` : undefined,
-                      }}
-                    />
-                  ) : (
-                    student.name.charAt(0)
-                  )}
+                  {student.name.charAt(0)}
                 </div>
-
-                <div className="min-w-0">
+                <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="font-sans font-bold text-base sm:text-lg text-[#F1E7CE] truncate">
-                      إعدادات الطالب
+                    <h2 className="text-base sm:text-lg font-bold text-[#F1E7CE] font-sans">
+                      Student Settings
                     </h2>
                     <span className="text-xs bg-[#B8860B]/30 text-[#F1E7CE] px-2 py-0.5 rounded-full font-bold">
                       {student.name}
                     </span>
                   </div>
                   <p className="text-[11px] text-[#B8860B] font-sans truncate">
-                    {familyName} • الصورة الشخصية وأيام الحضور
+                    {familyName} • Photo, Attendance Days & Direct Link
                   </p>
                 </div>
               </div>
@@ -262,7 +357,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                 id="close-student-settings-btn"
                 type="button"
                 onClick={onClose}
-                aria-label="إغلاق الإعدادات"
+                aria-label="Close Settings"
                 className="p-1.5 rounded-lg text-[#F1E7CE] hover:text-white hover:bg-white/15 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
@@ -272,58 +367,91 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
             {/* Scrollable Content */}
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 no-scrollbar">
               {/* =========================================================================
-                  القسم الأول: صورة الطالب وتوسيطها في الإطار
+                  Section 1: Student Photo
                  ========================================================================= */}
               <section id="settings-section-photo" className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <Camera className="w-4.5 h-4.5 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      صورة الطالب الشخصية
+                      Student Profile Photo
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold text-[#0E5C56] bg-[#0E5C56]/15 px-2.5 py-0.5 rounded-full">
-                    معاينة حية وتوسيط
+                    Drag / Pinch to zoom
                   </span>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3.5">
-                  {/* Portrait Live Preview & Upload Action */}
+                  {/* File Error Notification */}
+                  {fileError && (
+                    <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+                      <span>{fileError}</span>
+                    </div>
+                  )}
+
+                  {/* Portrait Live Preview with Direct Drag Support */}
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     {/* Live Portrait Frame Preview */}
-                    <div className="w-32 h-40 sm:w-36 sm:h-44 bg-white rounded-[22px] border-2 border-[#B8860B]/40 overflow-hidden shadow-sm flex flex-col shrink-0">
-                      <div className="relative flex-1 bg-gradient-to-b from-[#FAF6EE] to-[#EAE0CA] overflow-hidden flex items-center justify-center">
-                        {photoUrl ? (
-                          <img
-                            src={photoUrl}
-                            alt={student.name}
-                            className="w-full h-full object-cover transition-all"
-                            style={{
-                              objectPosition: `${posX}% ${posY}%`,
-                              transform: zoom !== 1 ? `scale(${zoom})` : undefined,
-                            }}
-                          />
-                        ) : (
-                          <div
-                            className="w-full h-full flex flex-col items-center justify-center text-white"
-                            style={{
-                              background: `linear-gradient(135deg, ${student.color || '#0E5C56'}dd, ${student.color || '#0E5C56'})`,
-                            }}
-                          >
-                            <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xl font-bold font-sans shadow-inner">
-                              {student.name.charAt(0)}
+                    <div className="flex flex-col items-center">
+                      <div
+                        ref={previewBoxRef}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        onWheel={handleWheel}
+                        className={`w-32 h-40 sm:w-36 sm:h-44 bg-white rounded-[22px] border-2 border-[#B8860B]/40 overflow-hidden shadow-sm flex flex-col shrink-0 select-none ${
+                          photoUrl ? 'cursor-grab active:cursor-grabbing' : ''
+                        }`}
+                        title={photoUrl ? 'Drag photo directly to center, or use wheel to zoom' : ''}
+                      >
+                        <div className="relative flex-1 bg-gradient-to-b from-[#FAF6EE] to-[#EAE0CA] overflow-hidden flex items-center justify-center">
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt={student.name}
+                              className="w-full h-full object-cover pointer-events-none"
+                              style={{
+                                objectPosition: `${posX}% ${posY}%`,
+                                transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full flex flex-col items-center justify-center text-white"
+                              style={{
+                                background: `linear-gradient(135deg, ${student.color || '#0E5C56'}dd, ${student.color || '#0E5C56'})`,
+                              }}
+                            >
+                              <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xl font-bold font-sans shadow-inner">
+                                {student.name.charAt(0)}
+                              </div>
+                              <span className="text-[11px] text-white/90 font-sans mt-1">
+                                {student.name}
+                              </span>
                             </div>
-                            <span className="text-[11px] text-white/90 font-serif mt-1">
-                              {student.arabicName || student.name}
-                            </span>
-                          </div>
-                        )}
+                          )}
+
+                          {photoUrl && (
+                            <div className="absolute bottom-1 right-1 bg-black/50 text-white text-[9px] px-1.5 py-0.5 rounded-full pointer-events-none">
+                              Drag to adjust
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="py-1 px-1 text-center bg-white border-t border-amber-100/60">
+                          <span className="font-bold text-xs text-[#B8860B] block truncate">
+                            {student.name}
+                          </span>
+                        </div>
                       </div>
-                      <div className="py-1.5 px-1 text-center bg-white border-t border-amber-100/60">
-                        <span className="font-bold text-xs text-[#B8860B] block truncate">
-                          {student.name}
-                        </span>
-                      </div>
+                      <span className="text-[10px] text-[#5B6478] mt-1">
+                        {photoUrl ? 'Drag to position face' : 'No photo uploaded yet'}
+                      </span>
                     </div>
 
                     {/* Controls & Upload Button */}
@@ -331,7 +459,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
                         onChange={handleFileChange}
                         className="hidden"
                       />
@@ -339,10 +467,20 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-2.5 px-3 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98"
+                        disabled={isCompressing}
+                        className="w-full py-2.5 px-3 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98 disabled:opacity-50"
                       >
-                        <Upload className="w-4 h-4 text-[#B8860B]" />
-                        <span>اختيار صورة من الجهاز / الجوال</span>
+                        {isCompressing ? (
+                          <>
+                            <RotateCw className="w-4 h-4 animate-spin text-[#B8860B]" />
+                            <span>Compressing photo...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 text-[#B8860B]" />
+                            <span>Choose Photo from Device</span>
+                          </>
+                        )}
                       </button>
 
                       {photoUrl && (
@@ -353,13 +491,13 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                             className="flex-1 py-1.5 px-2 rounded-xl bg-[#FAF6EE] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <Sliders className="w-3.5 h-3.5 text-[#B8860B]" />
-                            <span>{showPhotoControls ? 'إخفاء الضبط' : 'ضبط التوسيط والتكبير'}</span>
+                            <span>{showPhotoControls ? 'Hide Sliders' : 'Fine-Tune Sliders'}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={handleRemovePhoto}
-                            title="إزالة الصورة والرجوع للشعار الافتراضي"
+                            title="Remove photo and return to initial"
                             className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -368,7 +506,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                       )}
 
                       <p className="text-[11px] text-[#5B6478] leading-relaxed">
-                        اختر صورة مناسبة للطالب، ثم اضبط موضع الوجه في الإطار ليظهر بدقة على الواجهة الرئيسية.
+                        Photos are compressed locally for fast loading. Drag on the preview to position or adjust zoom below.
                       </p>
                     </div>
                   </div>
@@ -381,7 +519,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-bold text-[#0E5C56] flex items-center gap-1">
                             <Move className="w-3.5 h-3.5 text-[#B8860B]" />
-                            توسيط رأسي (أعلى / أسفل):
+                            Vertical Center (Top / Bottom):
                           </span>
                           <span className="font-mono text-[#5B6478] font-semibold">{posY}%</span>
                         </div>
@@ -401,21 +539,21 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                             onClick={() => handleUpdatePositionAndZoom(posX, 10, zoom)}
                             className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
                           >
-                            أعلى (10%)
+                            Top (10%)
                           </button>
                           <button
                             type="button"
                             onClick={() => handleUpdatePositionAndZoom(posX, 30, zoom)}
                             className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
                           >
-                            وسط أعلى (30%)
+                            Mid-Top (30%)
                           </button>
                           <button
                             type="button"
                             onClick={() => handleUpdatePositionAndZoom(posX, 50, zoom)}
                             className="px-2 py-0.5 rounded bg-white border border-[#B8860B]/20 hover:bg-[#F3EAD3]"
                           >
-                            وسط (50%)
+                            Center (50%)
                           </button>
                         </div>
                       </div>
@@ -425,7 +563,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-bold text-[#0E5C56] flex items-center gap-1">
                             <ZoomIn className="w-3.5 h-3.5 text-[#B8860B]" />
-                            تكبير وتصغير الصورة:
+                            Zoom Level:
                           </span>
                           <span className="font-mono text-[#5B6478] font-semibold">
                             {zoom.toFixed(1)}x
@@ -449,51 +587,47 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </section>
 
               {/* =========================================================================
-                  القسم الثاني: الإعدادات (أيام الحضور)
+                  Section 2: Weekly Attendance Days
                  ========================================================================= */}
-              <section id="settings-section-attendance" className="space-y-2">
+              <section id="settings-section-attendance-days" className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <Calendar className="w-4.5 h-4.5 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      الإعدادات (أيام الحضور)
+                      Weekly Attendance Days
                     </h3>
                   </div>
-                  <span className="text-[10px] font-bold text-[#0E5C56] bg-[#0E5C56]/15 px-2.5 py-0.5 rounded-full">
-                    مخصص لهذا الطالب
+                  <span className="text-[10px] font-bold text-[#B8860B] bg-[#B8860B]/15 px-2.5 py-0.5 rounded-full">
+                    {studentAttendanceDays.length} days/week
                   </span>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3">
-                  <div>
-                    <p className="text-[11.5px] sm:text-xs text-[#5B6478] font-medium leading-relaxed">
-                      اختر أيام حضور الطالب لتحديد مواعيد التسميع والترحيل التلقائي:
-                    </p>
-                  </div>
+                  <p className="text-[11.5px] sm:text-xs text-[#5B6478] font-medium leading-relaxed">
+                    Select the days this student attends class:
+                  </p>
 
-                  {/* Interactive Week Days Grid: Sat to Fri */}
-                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5" id="settings-attendance-days-grid">
-                    {WEEK_DAYS.map(({ dayIndex, shortLabel, label }) => {
-                      const isSelected = studentAttendanceDays.includes(dayIndex);
+                  {/* Weekdays Toggle Chips */}
+                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center">
+                    {WEEK_DAYS.map((day) => {
+                      const isSelected = studentAttendanceDays.includes(day.id);
                       return (
                         <button
-                          key={`settings-day-${dayIndex}`}
-                          id={`settings-day-toggle-${dayIndex}`}
+                          key={`att-day-${day.id}`}
                           type="button"
-                          onClick={() => handleToggleDay(dayIndex)}
-                          title={`${label}: ${isSelected ? 'محدد' : 'غير محدد'}`}
-                          className={`py-2 px-0.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer border ${
+                          onClick={() => handleToggleDay(day.id)}
+                          className={`py-2 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 border shadow-2xs ${
                             isSelected
-                              ? 'bg-[#0E5C56] text-[#F1E7CE] border-[#0E5C56] shadow-xs'
-                              : 'bg-[#FAF6EE] text-[#5B6478] hover:bg-[#F3EAD3] border-[#B8860B]/25'
+                              ? 'bg-[#0E5C56] text-[#F1E7CE] border-[#0E5C56] shadow-xs scale-102 ring-1 ring-[#0E5C56]'
+                              : 'bg-[#FAF6EE] text-[#5B6478] border-[#B8860B]/20 hover:bg-[#F3EAD3]'
                           }`}
                         >
-                          <span className="text-[10px] sm:text-[11px]">{shortLabel}</span>
-                          {isSelected ? (
-                            <div className="w-2 h-2 rounded-full bg-[#86EFAC]" />
-                          ) : (
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                          )}
+                          <span className="text-[10px] sm:text-[11px] leading-none">{day.short}</span>
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isSelected ? 'bg-[#B8860B]' : 'bg-transparent'
+                            }`}
+                          />
                         </button>
                       );
                     })}
@@ -501,7 +635,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
 
                   {/* Quick Preset Buttons */}
                   <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[10.5px] font-bold text-[#5B6478]">نماذج سريعة:</span>
+                    <span className="text-[10.5px] font-bold text-[#5B6478]">Presets:</span>
                     <button
                       type="button"
                       onClick={() => handleSetPresetDays([1, 5])}
@@ -513,7 +647,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                           : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
                       }`}
                     >
-                      إثنين + جمعة
+                      Mon + Fri
                     </button>
                     <button
                       type="button"
@@ -527,7 +661,7 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                           : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
                       }`}
                     >
-                      أحد + ثلاثاء + خميس
+                      Sun + Tue + Thu
                     </button>
                     <button
                       type="button"
@@ -541,13 +675,13 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                           : 'bg-[#FAF6EE] text-[#0E5C56] border-[#B8860B]/30 hover:bg-[#F3EAD3]'
                       }`}
                     >
-                      سبت + إثنين + أربعاء
+                      Sat + Mon + Wed
                     </button>
                   </div>
 
                   {/* Summary of Active Days */}
                   <div className="pt-2.5 border-t border-[#B8860B]/15 flex items-center justify-between text-[11px] sm:text-xs text-[#0E5C56] bg-[#FAF6EE] px-3 py-2 rounded-xl">
-                    <span className="font-semibold">الأيام المعتمدة:</span>
+                    <span className="font-semibold">Active Days:</span>
                     <span className="font-bold text-[#0E5C56]">
                       {getAttendanceDaysSummary(studentAttendanceDays)}
                     </span>
@@ -556,27 +690,41 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </section>
 
               {/* =========================================================================
-                  القسم الثالث: رابط المشاركة المباشر للطالب
+                  Section 3: Shareable Direct Link
                  ========================================================================= */}
               <section id="settings-section-share-link" className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <Link2 className="w-4.5 h-4.5 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      رابط صفحة الطالب المباشر
+                      Direct Student Link
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold text-[#16A34A] bg-[#16A34A]/15 px-2.5 py-0.5 rounded-full">
-                    مباشر لـ {student.name}
+                    Direct for {student.name}
                   </span>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3">
-                  <p className="text-[11.5px] sm:text-xs text-[#5B6478] font-medium leading-relaxed">
-                    عند فتح هذا الرابط، يفتح صفحة <strong>{student.name} ({student.arabicName || ''})</strong> مباشرة، مع إمكانية التنقل بين إخوته في نفس الأسرة:
-                  </p>
+                  {/* Security Warning Label */}
+                  <div className="p-3 bg-amber-50/80 border border-amber-300/80 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold mb-0.5">Privacy Notice:</strong>
+                      <span>
+                        Anyone with this direct link can view this student&apos;s homework and progress without a password. If shared accidentally, you can invalidate it anytime by clicking &quot;Regenerate Link&quot; below.
+                      </span>
+                    </div>
+                  </div>
 
-                  {/* URL Display and Copy Button */}
+                  {tokenNotice && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{tokenNotice}</span>
+                    </div>
+                  )}
+
+                  {/* URL Display and Action Buttons */}
                   <div className="flex items-center gap-1.5">
                     <input
                       type="text"
@@ -598,27 +746,39 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
                       {copiedLink ? (
                         <>
                           <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>تم النسخ!</span>
+                          <span>Copied!</span>
                         </>
                       ) : (
                         <>
                           <Link2 className="w-3.5 h-3.5 text-[#B8860B]" />
-                          <span>نسخ</span>
+                          <span>Copy</span>
                         </>
                       )}
                     </button>
                   </div>
 
-                  {/* Native Mobile Share Button */}
-                  <button
-                    id="modal-native-share-btn"
-                    type="button"
-                    onClick={handleNativeShare}
-                    className="w-full py-2.5 px-3 rounded-xl bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
-                  >
-                    <Share2 className="w-4 h-4 text-[#B8860B]" />
-                    <span>مشاركة عبر التطبيقات (واتساب / تليجرام)</span>
-                  </button>
+                  {/* Revoke / Regenerate Token Button */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      id="modal-native-share-btn"
+                      type="button"
+                      onClick={handleNativeShare}
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+                    >
+                      <Share2 className="w-4 h-4 text-[#B8860B]" />
+                      <span>Share via WhatsApp / App</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRegenerateToken}
+                      title="Invalidates the old link immediately"
+                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-red-50 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Regenerate Link</span>
+                    </button>
+                  </div>
                 </div>
               </section>
             </div>
@@ -626,15 +786,15 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
             {/* Modal Footer */}
             <div className="p-3 sm:p-4 bg-[#F5EFDD] border-t border-[#B8860B]/20 flex items-center justify-between shrink-0">
               <span className="text-[11px] text-[#5B6478] font-medium">
-                يتم حفظ التغييرات تلقائياً
+                Changes saved automatically
               </span>
               <button
                 id="done-student-settings-btn"
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all cursor-pointer shadow-xs"
+                className="px-6 py-2 rounded-xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] text-xs font-bold transition-all cursor-pointer shadow-xs"
               >
-                تم
+                Done
               </button>
             </div>
           </motion.div>

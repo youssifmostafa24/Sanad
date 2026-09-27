@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { X, Search, BookOpen } from 'lucide-react';
 import {
   QURAN_SURAHS,
@@ -6,6 +6,7 @@ import {
   getSurahStatusMeta,
 } from '../data/quranSurahs';
 import { Student, SurahMemorizationStatus } from '../types';
+import { CustomSelectDropdown, DropdownOption } from './CustomSelectDropdown';
 
 interface SurahProgressModalProps {
   isOpen: boolean;
@@ -24,6 +25,13 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeSurahForStatus, setActiveSurahForStatus] = useState<{
+    surahNumber: number;
+    surahName: string;
+    surahArabic: string;
+    currentStatus: SurahMemorizationStatus;
+  } | null>(null);
+  const activeTriggerRef = useRef<HTMLDivElement | null>(null);
 
   // Reactive local ratings state to guarantee instant background color change on selection
   const [localRatings, setLocalRatings] = useState<Record<number, SurahMemorizationStatus>>(() => ({
@@ -41,6 +49,20 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
     }));
     onUpdateSurahStatus(surahNumber, newStatus);
   };
+
+  const surahStatusOptions: DropdownOption<SurahMemorizationStatus>[] = SURAH_STATUS_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    badgeContent: (
+      <span
+        className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[9px] font-bold text-white shadow-2xs"
+        style={{ backgroundColor: opt.bgColor }}
+      >
+        {opt.value === 'strong' ? '✓' : opt.value === 'medium' ? '•' : opt.value === 'in_progress' ? '⏳' : opt.value === 'weak' ? '!' : opt.value === 'forgot' ? '✕' : '—'}
+      </span>
+    ),
+    badgeStyle: 'bg-transparent border-none p-0',
+  }));
 
   // Compute status counts dynamically from localRatings
   const statusCounts = useMemo(() => {
@@ -87,7 +109,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
   return (
     <div
       id="surah-progress-overlay"
-      dir="rtl"
+      dir="ltr"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
@@ -109,13 +131,13 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
               <div className="flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-[#B8860B]" />
                 <h2 className="text-sm sm:text-base font-bold text-[#F1E7CE]">
-                  سجل حفظ القرآن الكريم — {student.name}
+                  Surah Memorization Tracker — {student.name}
                 </h2>
               </div>
               <p className="text-[11px] text-[#F1E7CE]/80 font-medium">
                 {isTeacherMode
-                  ? 'وضع المعلم: يمكنك تعديل حالة أي سورة مباشرة من القائمة المنسدلة'
-                  : 'عرض تقييمات حفظ السور للطالب'}
+                  ? 'Teacher Mode: Click on any Surah to adjust memorization status'
+                  : 'Student View: Overview of memorized and reviewed Surahs'}
               </p>
             </div>
           </div>
@@ -124,7 +146,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-[#F1E7CE]/80 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
-            title="إغلاق"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -158,7 +180,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
               onClick={() => setStatusFilter('all')}
               className="text-[11px] font-bold text-[#0E5C56] hover:underline px-1.5"
             >
-              عرض الكل (114)
+              Show All (114)
             </button>
           )}
         </div>
@@ -166,13 +188,13 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
         {/* Search Input Bar */}
         <div className="p-3 bg-[#FBF6E8] border-b border-[#B8860B]/20 flex items-center gap-2 shrink-0">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#5B6478] absolute right-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#5B6478] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="ابحث باسم السورة (مثل: الكهف، مريم) أو رقمها..."
+              placeholder="Search by Surah name (e.g. Al-Kahf, Maryam) or number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-[#B8860B]/30 rounded-xl pr-9 pl-3 py-1.5 text-xs sm:text-sm text-[#1F2A3D] placeholder-[#5B6478]/60 focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 font-arabic"
+              className="w-full bg-white border border-[#B8860B]/30 rounded-xl pl-9 pr-3 py-1.5 text-xs sm:text-sm text-[#1F2A3D] placeholder-[#5B6478]/60 focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 font-sans"
             />
           </div>
           {searchQuery && (
@@ -181,7 +203,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
               onClick={() => setSearchQuery('')}
               className="text-xs font-semibold text-[#5B6478] hover:text-[#1F2A3D] px-2 py-1"
             >
-              مسح
+              Clear
             </button>
           )}
         </div>
@@ -190,7 +212,7 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
           {filteredSurahs.length === 0 ? (
             <div className="text-center py-10 text-xs sm:text-sm text-[#5B6478]">
-              لا توجد سور مطابقة للبحث أو الفلتر المحدد.
+              No Surahs match the current search or filter.
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -201,51 +223,53 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
                 return (
                   <div
                     key={surah.number}
-                    className="relative px-2 py-3 rounded-xl shadow-2xs flex items-center justify-center text-center transition-all hover:brightness-105 active:scale-95 cursor-pointer min-h-[46px] border border-white/20"
+                    onClick={(e) => {
+                      if (isTeacherMode) {
+                        e.stopPropagation();
+                        activeTriggerRef.current = e.currentTarget;
+                        setActiveSurahForStatus({
+                          surahNumber: surah.number,
+                          surahName: surah.name,
+                          surahArabic: surah.arabicName,
+                          currentStatus,
+                        });
+                      }
+                    }}
+                    role={isTeacherMode ? 'button' : undefined}
+                    tabIndex={isTeacherMode ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (isTeacherMode && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        activeTriggerRef.current = e.currentTarget as HTMLDivElement;
+                        setActiveSurahForStatus({
+                          surahNumber: surah.number,
+                          surahName: surah.name,
+                          surahArabic: surah.arabicName,
+                          currentStatus,
+                        });
+                      }
+                    }}
+                    className={`relative px-2 py-3 rounded-xl shadow-2xs flex items-center justify-center text-center transition-all hover:brightness-105 active:scale-95 min-h-[46px] border border-white/20 select-none ${
+                      isTeacherMode ? 'cursor-pointer hover:ring-2 hover:ring-white/60' : 'cursor-default'
+                    }`}
                     style={{
                       backgroundColor: meta.bgColor,
                     }}
                     title={
                       isTeacherMode
-                        ? `${surah.arabicName} - ${surah.name} — اضغط لتغيير التقييم`
-                        : `${surah.arabicName} - ${surah.name}`
+                        ? `${surah.name} (${surah.arabicName}) — اضغط لتعديل حالة الحفظ`
+                        : `${surah.name} (${surah.arabicName})`
                     }
                   >
-                    {/* Surah Name: Arabic - English (e.g. العلق - Al-Alaq) */}
+                    {/* Surah Name: English - Arabic */}
                     <div className="flex items-center justify-center gap-1 w-full max-w-full px-1 select-none pointer-events-none truncate text-white drop-shadow-2xs">
-                      <span className="text-xs sm:text-[13px] font-bold font-arabic truncate">
-                        {surah.arabicName}
+                      <span className="text-[11px] sm:text-xs font-medium text-white/95 font-sans tracking-tight shrink-0">
+                        {surah.name}
                       </span>
-                      <span className="text-[11px] sm:text-xs font-medium text-white/90 font-sans tracking-tight shrink-0">
-                        - {surah.name}
+                      <span className="text-xs sm:text-[13px] font-bold font-serif truncate">
+                        - {surah.arabicName}
                       </span>
                     </div>
-
-                    {/* In Teacher Mode: Transparent full-card select to change status on click */}
-                    {isTeacherMode && (
-                      <select
-                        aria-label={`تقييم ${surah.arabicName} - ${surah.name}`}
-                        value={currentStatus}
-                        onChange={(e) =>
-                          handleStatusChange(
-                            surah.number,
-                            e.target.value as SurahMemorizationStatus
-                          )
-                        }
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        title={`اضغط لتغيير تقييم ${surah.arabicName} - ${surah.name}`}
-                      >
-                        {SURAH_STATUS_OPTIONS.map((opt) => (
-                          <option
-                            key={opt.value}
-                            value={opt.value}
-                            className="text-black bg-white"
-                          >
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
                   </div>
                 );
               })}
@@ -256,17 +280,37 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
         {/* Footer */}
         <div className="px-4 py-2.5 bg-white border-t border-[#B8860B]/20 flex items-center justify-between text-xs text-[#5B6478] shrink-0">
           <span>
-            إجمالي السور المعروضة: <b>{filteredSurahs.length}</b> من 114
+            Total Displayed Surahs: <b>{filteredSurahs.length}</b> of 114
           </span>
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-1.5 bg-[#0E5C56] text-[#F1E7CE] font-bold rounded-lg hover:bg-[#0A423E] transition-colors cursor-pointer"
           >
-            إغلاق
+            Close
           </button>
         </div>
       </div>
+
+      {/* Custom Dropdown for Teacher Status Selection */}
+      {activeSurahForStatus && (
+        <CustomSelectDropdown<SurahMemorizationStatus>
+          isOpen={true}
+          onClose={() => setActiveSurahForStatus(null)}
+          triggerRef={activeTriggerRef}
+          selectedValue={activeSurahForStatus.currentStatus}
+          onSelect={(newStatus) => {
+            handleStatusChange(activeSurahForStatus.surahNumber, newStatus);
+            setActiveSurahForStatus(null);
+          }}
+          title={`حالة حفظ سورة ${activeSurahForStatus.surahArabic}`}
+          width={240}
+          align="center"
+          dir="rtl"
+          idPrefix={`surah-status-${activeSurahForStatus.surahNumber}`}
+          options={surahStatusOptions}
+        />
+      )}
     </div>
   );
 };

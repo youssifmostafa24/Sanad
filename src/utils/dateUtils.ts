@@ -134,6 +134,50 @@ export function formatWeekEnglish(startStr: string, endStr: string): string {
 }
 
 /**
+ * Determines whether a given week ending date (Thursday) is the current active week.
+ */
+export function isCurrentStudyWeek(weekEndThursday: string, now: Date = new Date()): boolean {
+  const currentWeek = getWeekBounds(now);
+  return weekEndThursday === currentWeek.endStr;
+}
+
+/**
+ * Returns a human-friendly label for a week's star card:
+ * - "This week so far" for the current active week
+ * - "Week of [date range]" (e.g. "Week of Sep 19–24") for past completed weeks
+ * - "Upcoming Week ([date])" for future weeks
+ */
+export function getWeeklyStarCardTitle(
+  weekBounds: { startStr: string; endStr: string },
+  now: Date = new Date()
+): string {
+  const currentWeek = getWeekBounds(now);
+
+  // If this week is the current active week
+  if (weekBounds.endStr === currentWeek.endStr) {
+    return 'This week so far';
+  }
+
+  const startDate = parseLocalDate(weekBounds.startStr);
+  const endDate = parseLocalDate(weekBounds.endStr);
+  const startMonth = startDate.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = endDate.toLocaleDateString('en-US', { month: 'short' });
+  const startDay = startDate.getDate();
+  const endDay = endDate.getDate();
+
+  // If week has already ended (past completed week)
+  if (weekBounds.endStr < currentWeek.endStr) {
+    if (startDate.getMonth() === endDate.getMonth()) {
+      return `Week of ${startMonth} ${startDay}–${endDay}`;
+    }
+    return `Week of ${startMonth} ${startDay} – ${endMonth} ${endDay}`;
+  }
+
+  // Future week
+  return `Upcoming Week (${startMonth} ${startDay})`;
+}
+
+/**
  * Determines whether a week's rating is visible.
  * Becomes visible once Thursday has passed (or if in review).
  */
@@ -175,17 +219,7 @@ export function getWeeklyStarRating(
   entries: Entry[],
   manualWeeklyStars?: ManualWeeklyStars[],
   now: Date = new Date()
-): { stars: number; isManual: boolean } | null {
-  // If student has manual weekly stars matching this week's end or Friday
-  if (manualWeeklyStars && manualWeeklyStars.length > 0) {
-    const manual = manualWeeklyStars.find(
-      (m) => m.weekEndDate === weekEndDateStr || m.weekEndDate === addDays(weekEndDateStr, 1)
-    );
-    if (manual) {
-      return { stars: Math.max(0, Math.min(5, manual.stars)), isManual: true };
-    }
-  }
-
+): { stars: number; isManual: boolean; autoStars: number } | null {
   // Week runs Saturday to Thursday. Start date (Saturday) is 5 days before weekEndDateStr (Thursday)
   const saturdayStr = addDays(weekEndDateStr, -5);
   // Also include Friday (6 days after Saturday) just in case an entry was created on Friday
@@ -204,13 +238,30 @@ export function getWeeklyStarRating(
     }
   }
 
+  const average = grades.length > 0 ? grades.reduce((acc, curr) => acc + curr, 0) / grades.length : 0;
+  const autoStars = grades.length > 0 ? calculateStarsFromPercentage(average) : 0;
+
+  // Check if student has manual weekly stars override matching this week's end or Friday
+  if (manualWeeklyStars && manualWeeklyStars.length > 0) {
+    const manual = manualWeeklyStars.find(
+      (m) =>
+        m.weekEndDate === weekEndDateStr || m.weekEndDate === addDays(weekEndDateStr, 1)
+    );
+    if (manual) {
+      if (manual.disabledAuto === false) {
+        // Explicitly set to automatic calculation
+        return { stars: Math.max(0, Math.min(5, autoStars)), isManual: false, autoStars };
+      }
+      return { stars: Math.max(0, Math.min(5, manual.stars)), isManual: true, autoStars };
+    }
+  }
+
   if (grades.length === 0) {
     return null;
   }
 
-  const average = grades.reduce((acc, curr) => acc + curr, 0) / grades.length;
-  const stars = calculateStarsFromPercentage(average);
-  return { stars: Math.max(0, Math.min(5, stars)), isManual: false };
+  // Requirement 4: newly created star rating cards default to Manual mode instead of Automatic!
+  return { stars: Math.max(0, Math.min(5, autoStars)), isManual: true, autoStars };
 }
 
 /**

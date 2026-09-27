@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Family, Student, Entry, SurahMemorizationStatus, GradeValue } from './types';
+import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars } from './types';
 import { getInitialData } from './data/seedData';
 import {
   formatLocalDate,
@@ -8,6 +8,8 @@ import {
   addDays,
   getNextAttendanceDate,
   getWeeklyStarRating,
+  isCurrentStudyWeek,
+  getWeeklyStarCardTitle,
 } from './utils/dateUtils';
 import { Header } from './components/Header';
 import { HomeworkRow } from './components/HomeworkRow';
@@ -112,30 +114,27 @@ export default function App() {
       try {
         const remoteData = await fetchAllDataFromSupabase();
         if (remoteData && isMounted && remoteData.families.length > 0) {
-          // Merge remote data with existing data:
-          // If a student in remoteData has 0 entries but exists in local data with entries (like Ibrahim, Sulaymn, Yusuf),
-          // preserve those entries so they never disappear!
+          // When Supabase connects, Supabase is the Single Source of Truth!
+          // We cleanly replace local state with remote data.
+          // Only if remoteData has 0 entries for a student who has entries locally, we retain them.
           setData((prev) => {
             const mergedStudents = remoteData.students.map((remoteSt) => {
-              const localSt = prev.students.find((s) => s.id === remoteSt.id);
               if (remoteSt.entries && remoteSt.entries.length > 0) {
-                // Remote has entries, use them (or merge unique by id/date)
-                if (localSt && localSt.entries && localSt.entries.length > 0) {
-                  const entryIds = new Set(remoteSt.entries.map((e) => e.id));
-                  const missingFromRemote = localSt.entries.filter((e) => !entryIds.has(e.id));
-                  return {
-                    ...remoteSt,
-                    entries: [...remoteSt.entries, ...missingFromRemote].sort((a, b) => b.date.localeCompare(a.date)),
-                  };
-                }
-                return remoteSt;
-              }
-              // If remote has 0 entries, keep local entries
-              if (localSt && localSt.entries && localSt.entries.length > 0) {
+                // Deduplicate strictly by date: exactly 1 entry per date!
+                const dateMap = new Map<string, Entry>();
+                remoteSt.entries.forEach((e) => {
+                  if (!dateMap.has(e.date)) {
+                    dateMap.set(e.date, e);
+                  }
+                });
                 return {
                   ...remoteSt,
-                  entries: localSt.entries,
+                  entries: Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date)),
                 };
+              }
+              const localSt = prev.students.find((s) => s.id === remoteSt.id);
+              if (localSt && localSt.entries && localSt.entries.length > 0) {
+                return { ...remoteSt, entries: localSt.entries };
               }
               return remoteSt;
             });
@@ -161,18 +160,19 @@ export default function App() {
         if (remoteData && isMounted && remoteData.families.length > 0) {
           setData((prev) => {
             const mergedStudents = remoteData.students.map((remoteSt) => {
-              const localSt = prev.students.find((s) => s.id === remoteSt.id);
               if (remoteSt.entries && remoteSt.entries.length > 0) {
-                if (localSt && localSt.entries && localSt.entries.length > 0) {
-                  const entryIds = new Set(remoteSt.entries.map((e) => e.id));
-                  const missingFromRemote = localSt.entries.filter((e) => !entryIds.has(e.id));
-                  return {
-                    ...remoteSt,
-                    entries: [...remoteSt.entries, ...missingFromRemote].sort((a, b) => b.date.localeCompare(a.date)),
-                  };
-                }
-                return remoteSt;
+                const dateMap = new Map<string, Entry>();
+                remoteSt.entries.forEach((e) => {
+                  if (!dateMap.has(e.date)) {
+                    dateMap.set(e.date, e);
+                  }
+                });
+                return {
+                  ...remoteSt,
+                  entries: Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date)),
+                };
               }
+              const localSt = prev.students.find((s) => s.id === remoteSt.id);
               if (localSt && localSt.entries && localSt.entries.length > 0) {
                 return { ...remoteSt, entries: localSt.entries };
               }
@@ -195,28 +195,77 @@ export default function App() {
     };
   }, []);
 
+  // Helper to match student param flexibly (e.g. 'musab' <-> 'student-musab', 'مصعب')
+  const findMatchingStudentId = (paramVal: string, studentList: Student[]): string | null => {
+    if (!paramVal) return null;
+    const cleanParam = paramVal.trim().toLowerCase();
+    const shortParam = cleanParam.replace(/^student-/, '');
+
+    const found = studentList.find((s) => {
+      const sId = s.id.toLowerCase();
+      const sShortId = sId.replace(/^student-/, '');
+      const sName = (s.name || '').toLowerCase().trim();
+      const sArabic = (s.arabicName || '').trim();
+      return (
+        sId === cleanParam ||
+        sShortId === shortParam ||
+        sName === shortParam ||
+        sName === cleanParam ||
+        (sArabic && (sArabic === paramVal.trim() || cleanParam.includes(sArabic)))
+      );
+    });
+    return found ? found.id : null;
+  };
+
   // Read URL query parameter for family (?fam=<familyId>) or student (?student=<id> / ?st=<id>)
+  // Priority: URL query parameters ALWAYS have higher priority than localStorage!
   const [activeFamilyId, setActiveFamilyId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const studentParam = params.get('student') || params.get('st');
     if (studentParam) {
-      const famWithStudent = data.families.find((f) => f.studentIds.includes(studentParam));
-      if (famWithStudent) {
-        return famWithStudent.id;
+      const matchedStudentId = findMatchingStudentId(studentParam, data.students);
+      if (matchedStudentId) {
+        const famWithStudent = data.families.find((f) => f.studentIds.includes(matchedStudentId));
+        if (famWithStudent) {
+          return famWithStudent.id;
+        }
       }
     }
     const famParam = params.get('fam');
-    if (famParam && data.families.some((f) => f.id === famParam)) {
-      return famParam;
+    if (famParam) {
+      const matchedFam = data.families.find(
+        (f) => f.id === famParam || f.id === `family-${famParam}` || f.id.endsWith(famParam)
+      );
+      if (matchedFam) {
+        return matchedFam.id;
+      }
     }
+    // Check localStorage for returning student/family only if no URL params
+    try {
+      const savedFam = localStorage.getItem('sanad_last_family_id');
+      if (savedFam && data.families.some((f) => f.id === savedFam)) {
+        return savedFam;
+      }
+    } catch {}
     return data.families[0]?.id || 'family-1';
   });
 
-  // View state: 'portal' (Master 3-families landing portal) vs 'family' (individual family page)
+  // View state: 'portal' vs 'family'
+  // Priority 1.3: Returning students land directly on their family page, not the all-families portal.
   const [currentView, setCurrentView] = useState<'portal' | 'family'>(() => {
     const params = new URLSearchParams(window.location.search);
     const hasStudentOrFam = params.get('fam') || params.get('student') || params.get('st');
-    return hasStudentOrFam ? 'family' : 'portal';
+    if (hasStudentOrFam) return 'family';
+
+    try {
+      const savedStudent = localStorage.getItem('sanad_last_student_id');
+      if (savedStudent && data.students.some((s) => s.id === savedStudent)) {
+        return 'family';
+      }
+    } catch {}
+
+    // Only teachers start in the multi-family portal by default
+    return isTeacherAuthenticatedStored() ? 'portal' : 'family';
   });
 
   // Persistent Teacher Authentication state (Password: 122333 / ١٢٢٣٣٣)
@@ -277,15 +326,49 @@ export default function App() {
     return famStudents.length > 0 ? famStudents : data.students;
   }, [data.students, activeFamily]);
 
-  // Active student state
+  // Active student state - URL parameters ALWAYS take priority over localStorage!
   const [activeStudentId, setActiveStudentId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const studentParam = params.get('student') || params.get('st');
-    if (studentParam && data.students.some((s) => s.id === studentParam)) {
-      return studentParam;
+    if (studentParam) {
+      const matched = findMatchingStudentId(studentParam, data.students);
+      if (matched) return matched;
     }
+    try {
+      const savedStudent = localStorage.getItem('sanad_last_student_id');
+      if (savedStudent && data.students.some((s) => s.id === savedStudent)) {
+        return savedStudent;
+      }
+    } catch {}
     return visibleStudents[0]?.id || data.students[0]?.id || '';
   });
+
+  // Re-synchronize URL params with activeFamily and activeStudent whenever data loads from Supabase
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const studentParam = params.get('student') || params.get('st');
+    const famParam = params.get('fam');
+
+    if (studentParam) {
+      const matched = findMatchingStudentId(studentParam, data.students);
+      if (matched && matched !== activeStudentId) {
+        setActiveStudentId(matched);
+      }
+      if (matched) {
+        const famWithStudent = data.families.find((f) => f.studentIds.includes(matched));
+        if (famWithStudent && famWithStudent.id !== activeFamilyId) {
+          setActiveFamilyId(famWithStudent.id);
+        }
+      }
+    } else if (famParam) {
+      const matchedFam = data.families.find(
+        (f) => f.id === famParam || f.id === `family-${famParam}` || f.id.endsWith(famParam)
+      );
+      if (matchedFam && matchedFam.id !== activeFamilyId) {
+        setActiveFamilyId(matchedFam.id);
+      }
+    }
+  }, [data.students.length, data.families.length]);
 
   // Ensure activeStudentId is valid whenever visibleStudents changes
   useEffect(() => {
@@ -300,37 +383,71 @@ export default function App() {
     return data.students.find((s) => s.id === activeStudentId) || data.students[0] || null;
   }, [data.students, activeStudentId]);
 
-  // Navigation from Portal to specific family & student
+  // Navigation from Portal to specific family & student with localStorage persistence
   const handleSelectFamilyAndStudent = (familyId: string, studentId?: string) => {
     setActiveFamilyId(familyId);
-    if (studentId) {
-      setActiveStudentId(studentId);
-    } else {
+    let chosenStudentId = studentId;
+    if (!chosenStudentId) {
       const targetFam = data.families.find((f) => f.id === familyId);
       if (targetFam && targetFam.studentIds.length > 0) {
-        setActiveStudentId(targetFam.studentIds[0]);
+        chosenStudentId = targetFam.studentIds[0];
       }
     }
+    if (chosenStudentId) {
+      setActiveStudentId(chosenStudentId);
+      try {
+        localStorage.setItem('sanad_last_student_id', chosenStudentId);
+      } catch {}
+    }
+    try {
+      localStorage.setItem('sanad_last_family_id', familyId);
+    } catch {}
+
     setCurrentView('family');
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('fam', familyId);
+      if (chosenStudentId) url.searchParams.set('student', chosenStudentId);
       window.history.pushState({}, '', url.toString());
     } catch {
       // ignore
     }
   };
 
-  // Return to Main Portal
+  // Return to Main Portal (gated for teachers)
   const handleOpenPortal = () => {
+    if (!isTeacherAuthenticated) {
+      // Non-teacher: return to their active student page or stay
+      return;
+    }
     setCurrentView('portal');
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('fam');
+      url.searchParams.delete('student');
+      url.searchParams.delete('st');
       window.history.pushState({}, '', url.toString());
     } catch {
       // ignore
     }
+  };
+
+  // Priority 2.1: Reorder or toggle families from teacher mode
+  const handleUpdateFamilyOrder = (updatedFamilies: Family[]) => {
+    setData((prev) => ({
+      ...prev,
+      families: updatedFamilies,
+    }));
+  };
+
+  // Priority 2.2: Update student share security token
+  const handleSaveStudentShareToken = (studentId: string, newToken: string) => {
+    setData((prev) => ({
+      ...prev,
+      students: prev.students.map((st) =>
+        st.id === studentId ? { ...st, shareToken: newToken } : st
+      ),
+    }));
   };
 
   // Monthly Navigation State
@@ -412,11 +529,25 @@ export default function App() {
       return false;
     });
 
-    // Sort ASCENDING (first day of month to last)
-    return filtered.sort((a, b) => {
-      if (a.date === b.date) return (a.id || '').localeCompare(b.id || '');
-      return a.date.localeCompare(b.date);
+    // Deduplicate strictly by date: Ensure only ONE entry ever appears for the same calendar date!
+    const uniqueEntriesByDate = new Map<string, Entry>();
+    filtered.forEach((e) => {
+      if (!uniqueEntriesByDate.has(e.date)) {
+        uniqueEntriesByDate.set(e.date, e);
+      } else {
+        const existing = uniqueEntriesByDate.get(e.date)!;
+        const isCurrentBetter =
+          (e.hifzGrade !== null && existing.hifzGrade === null) ||
+          (e.murajaaGrade !== null && existing.murajaaGrade === null) ||
+          (e.id.startsWith('entry-') && !existing.id.startsWith('entry-'));
+        if (isCurrentBetter) {
+          uniqueEntriesByDate.set(e.date, e);
+        }
+      }
     });
+
+    // Sort ASCENDING (first day of month to last)
+    return Array.from(uniqueEntriesByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [activeStudent, selectedMonthPrefix, selectedYearMonth]);
 
   // Find the single most recent entry that still has ANY ungraded portion
@@ -456,20 +587,31 @@ export default function App() {
   // Ref to target the latest homework entry in view
   const latestHomeworkRef = useRef<HTMLDivElement | null>(null);
 
-  // Whenever the active student changes (or their entries update from Supabase), automatically set the selected month to the month of the student's latest homework
+  // Track which students have had their initial month initialized
+  const initializedStudentMonthRef = useRef<Record<string, boolean>>({});
+
+  // Flag to skip resetting scroll to top (e.g., when repeating/adding a homework entry at the bottom)
+  const skipResetScrollToTopRef = useRef<boolean>(false);
+  const shouldScrollToBottomAfterAddRef = useRef<boolean>(false);
+
+  // Whenever the active student changes (or their initial entries load from Supabase), automatically set the selected month to the month of the student's latest homework
   useEffect(() => {
+    if (!activeStudentId) return;
     if (activeStudent?.entries && activeStudent.entries.length > 0) {
-      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-      const latest = sorted[0];
-      if (latest) {
-        const [y, m] = latest.date.split('-').map(Number);
-        if (y && m) {
-          setSelectedYearMonth((prev) => {
-            if (prev.year !== y || prev.month !== m) {
-              return { year: y, month: m };
-            }
-            return prev;
-          });
+      if (!initializedStudentMonthRef.current[activeStudentId]) {
+        initializedStudentMonthRef.current[activeStudentId] = true;
+        const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+        const latest = sorted[0];
+        if (latest) {
+          const [y, m] = latest.date.split('-').map(Number);
+          if (y && m) {
+            setSelectedYearMonth((prev) => {
+              if (prev.year !== y || prev.month !== m) {
+                return { year: y, month: m };
+              }
+              return prev;
+            });
+          }
         }
       }
     }
@@ -478,10 +620,35 @@ export default function App() {
   // Reset scroll to top whenever the student or month changes (normal natural scroll behavior)
   useEffect(() => {
     if (currentView !== 'family') return;
+    if (skipResetScrollToTopRef.current) {
+      skipResetScrollToTopRef.current = false;
+      return;
+    }
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [activeStudentId, selectedYearMonth.year, selectedYearMonth.month, currentView]);
+
+  // Ensure the view stays scrolled to the true bottom when a new entry is added
+  useEffect(() => {
+    if (shouldScrollToBottomAfterAddRef.current) {
+      shouldScrollToBottomAfterAddRef.current = false;
+      const scrollDown = (smooth = true) => {
+        if (scrollContainerRef.current) {
+          const container = scrollContainerRef.current;
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+          });
+        }
+      };
+      requestAnimationFrame(() => {
+        scrollDown(true);
+        setTimeout(() => scrollDown(true), 60);
+        setTimeout(() => scrollDown(false), 220);
+      });
+    }
+  }, [monthEntries.length, selectedYearMonth.year, selectedYearMonth.month]);
 
   // Handler to smoothly scroll directly to today's / latest homework entry
   const handleScrollToTodayHomework = () => {
@@ -587,6 +754,9 @@ export default function App() {
       murajaaGrade: null, // Ungraded
     };
 
+    skipResetScrollToTopRef.current = true;
+    shouldScrollToBottomAfterAddRef.current = true;
+
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
@@ -635,6 +805,10 @@ export default function App() {
       murajaaGrade: null,
     };
 
+    // Flag to prevent jumping to top and ensure bottom stays in view
+    skipResetScrollToTopRef.current = true;
+    shouldScrollToBottomAfterAddRef.current = true;
+
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
@@ -653,7 +827,26 @@ export default function App() {
     }
 
     const [y, m] = targetDate.split('-').map(Number);
-    setSelectedYearMonth({ year: y, month: m });
+    if (y && m && (selectedYearMonth.year !== y || selectedYearMonth.month !== m)) {
+      setSelectedYearMonth({ year: y, month: m });
+    }
+
+    const scrollToTrueBottom = (smooth = true) => {
+      if (scrollContainerRef.current) {
+        const container = scrollContainerRef.current;
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto',
+        });
+      }
+    };
+
+    // Keep both newly added entry and "+" button fully visible at the true bottom
+    requestAnimationFrame(() => {
+      scrollToTrueBottom(true);
+      setTimeout(() => scrollToTrueBottom(true), 60);
+      setTimeout(() => scrollToTrueBottom(false), 220);
+    });
   };
 
   // Surah Memorization Status Update Handler
@@ -854,6 +1047,72 @@ export default function App() {
     }
   };
 
+  // Handler for Weekly Star Settings: motivational note, title, manual star override & toggle (Req 9)
+  const handleSaveWeeklyStarSettings = (
+    studentId: string,
+    weekEndDate: string,
+    settings: {
+      message: string;
+      title: string;
+      manualStars?: number;
+      disableAuto: boolean;
+    }
+  ) => {
+    setData((prev) => ({
+      ...prev,
+      students: prev.students.map((st) => {
+        if (st.id !== studentId) return st;
+
+        const currentManualList = st.manualWeeklyStars || [];
+        let updatedManualList: ManualWeeklyStars[];
+
+        const existingIdx = currentManualList.findIndex(
+          (m) => m.weekEndDate === weekEndDate || m.weekEndDate === addDays(weekEndDate, 1)
+        );
+        const existingEntry = existingIdx >= 0 ? currentManualList[existingIdx] : null;
+
+        if (settings.disableAuto || settings.title || settings.message) {
+          const newEntry: ManualWeeklyStars = {
+            weekEndDate,
+            stars: typeof settings.manualStars === 'number' ? settings.manualStars : (existingEntry?.stars ?? 0),
+            disabledAuto: settings.disableAuto,
+            title: settings.title ? settings.title.trim() : undefined,
+            message: settings.message ? settings.message.trim() : undefined,
+          };
+          if (existingIdx >= 0) {
+            updatedManualList = [...currentManualList];
+            updatedManualList[existingIdx] = newEntry;
+          } else {
+            updatedManualList = [...currentManualList, newEntry];
+          }
+        } else {
+          updatedManualList = currentManualList.filter(
+            (m) => m.weekEndDate !== weekEndDate && m.weekEndDate !== addDays(weekEndDate, 1)
+          );
+        }
+
+        return {
+          ...st,
+          motivationalMessage: settings.message ? settings.message.trim() : undefined,
+          manualWeeklyStars: updatedManualList,
+        };
+      }),
+    }));
+
+    if (isSupabaseConfigured()) {
+      const student = data.students.find((s) => s.id === studentId);
+      if (student) {
+        updateStudentFocusInSupabase(
+          studentId,
+          student.memorizationFocus || '',
+          student.tilawaSurah,
+          student.tilawaAyah,
+          settings.message
+        ).catch((err) => console.warn('Supabase focus update error:', err));
+      }
+    }
+  };
+
   // Smart Voice Dictation & AI Homework Handler
   const handleSaveVoiceHomework = (
     studentId: string,
@@ -913,7 +1172,7 @@ export default function App() {
     handleGoToCurrentMonth();
   };
 
-  // If in portal view, render the 3-Family Master Portal
+  // If in portal view, render the Master Portal
   if (currentView === 'portal') {
     return (
       <>
@@ -928,6 +1187,7 @@ export default function App() {
           onToggleTeacherMode={handleToggleTeacherMode}
           onOpenStudentSettings={(st) => setSettingsStudentId(st.id)}
           onSyncToSupabase={() => syncAllLocalDataToSupabase(data)}
+          onUpdateFamilyOrder={handleUpdateFamilyOrder}
         />
         {settingsStudent && (
           <StudentSettingsModal
@@ -939,6 +1199,7 @@ export default function App() {
             isTeacherMode={isTeacherMode}
             onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
             onUpdateStudentPhoto={handleUpdateStudentPhoto}
+            onUpdateStudentShareToken={handleSaveStudentShareToken}
           />
         )}
       </>
@@ -948,6 +1209,7 @@ export default function App() {
   return (
     <div
       id="sanad-app-root"
+      dir="ltr"
       className="w-full h-screen flex flex-col bg-[#F5EFDD] text-[#1F2A3D] font-sans overflow-hidden selection:bg-[#B8860B]/20"
       style={{
         backgroundImage: `radial-gradient(circle at 10% 20%, rgba(184, 134, 11, 0.04) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(14, 92, 86, 0.05) 0%, transparent 40%)`,
@@ -962,11 +1224,12 @@ export default function App() {
         onResetData={handleResetData}
         visible={headerVisible}
         onOpenSidebar={() => setIsSidebarOpen(true)}
-        activeStudentName={activeStudent?.name}
+        activeStudentName={activeStudent?.name || activeStudent?.arabicName}
         onOpenPortal={handleOpenPortal}
         isTeacherAuthenticated={isTeacherAuthenticated}
         onTeacherLoginSuccess={handleTeacherLoginSuccess}
         onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
+        isSupabaseConnected={isSupabaseConnected}
       />
 
       {/* Main Content Area */}
@@ -974,10 +1237,10 @@ export default function App() {
         ref={scrollContainerRef}
         onScroll={handleScroll}
         id="main-scroll-view"
-        className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-16 sm:pb-20 px-1.5 sm:px-4 md:px-6"
+        className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-24 sm:pb-28 px-2 sm:px-4"
       >
-        <div className="w-full max-w-3xl sm:max-w-4xl mx-auto flex flex-col items-stretch space-y-2.5">
-          {/* Quick Jump to Today's Homework Button (Short English text with Arabic tooltip) */}
+        <div className="w-full max-w-[490px] sm:w-[490px] mx-auto flex flex-col items-stretch space-y-2">
+          {/* Quick Jump to Today's Homework Button */}
           {monthEntries.length > 0 && (
             <div className="flex justify-center w-full px-2 pt-0.5">
               <button
@@ -985,10 +1248,10 @@ export default function App() {
                 type="button"
                 onClick={handleScrollToTodayHomework}
                 className="group flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 bg-gradient-to-r from-[#0E5C56] to-[#127068] hover:from-[#0B4A45] hover:to-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-sm font-bold shadow-sm hover:shadow-md active:scale-95 transition-all cursor-pointer border border-[#B8860B]/30"
-                title="اضغط هنا للذهاب إلى واجبك اليوم"
+                title="Jump to current active homework"
               >
                 <span className="font-sans font-bold tracking-tight">
-                  Go to Today's Homework
+                  Jump to Today&apos;s Homework
                 </span>
                 <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E5C378] group-hover:translate-y-0.5 transition-transform stroke-[2.5]" />
               </button>
@@ -1016,19 +1279,19 @@ export default function App() {
               >
                 <BookOpen className="w-7 h-7 mx-auto text-[#B8860B]/60 mb-1.5" />
                 <h3 className="font-sans font-bold text-xs sm:text-sm text-[#0E5C56]">
-                  لا توجد واجبات مسجلة لشهر {selectedMonthLabel}
+                  No homework entries found for {selectedMonthLabel}
                 </h3>
                 {activeStudent && activeStudent.entries && activeStudent.entries.length > 0 && (
                   <div className="mt-2.5">
                     <p className="text-xs text-[#5B6478] mb-2 font-sans">
-                      يوجد {activeStudent.entries.length} واجباً مسجلاً للطالب في أشهر سابقة
+                      {activeStudent.entries.length} homework entries recorded in other months
                     </p>
                     <button
                       type="button"
                       onClick={handleScrollToTodayHomework}
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0E5C56] text-[#F5EFDD] text-xs font-bold hover:bg-[#0B4A45] active:scale-95 transition-all cursor-pointer shadow-xs"
                     >
-                      <span>الانتقال لآخر شهر به واجبات</span>
+                      <span>Jump to latest active month</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1103,25 +1366,44 @@ export default function App() {
                       />
 
                       {/* Weekly Star Band */}
-                      {shouldShowStarBand && weekRating !== null && (
-                        <WeeklyStarBand
-                          key={`week-stars-${weekEndThursday}`}
-                          stars={weekRating.stars}
-                          idPrefix={`week-stars-${weekEndThursday}`}
-                          title="This week so far"
-                          subtitle={activeStudent.motivationalMessage}
-                          isTeacherMode={isTeacherMode}
-                          onUpdateMotivationalMessage={(newMsg) => {
-                            handleSaveFocusNotes(
-                              activeStudent.id,
-                              activeStudent.memorizationFocus || '',
-                              activeStudent.tilawaSurah || 18,
-                              activeStudent.tilawaAyah || 1,
-                              newMsg
-                            );
-                          }}
-                        />
-                      )}
+                      {shouldShowStarBand && weekRating !== null && (() => {
+                        const now = new Date();
+                        const isCurrent = isCurrentStudyWeek(weekEndThursday, now);
+                        const defaultWeekTitle = getWeeklyStarCardTitle(weekBounds, now);
+
+                        const manualWeekConfig = activeStudent.manualWeeklyStars?.find(
+                          (m) =>
+                            m.weekEndDate === weekEndThursday ||
+                            m.weekEndDate === addDays(weekEndThursday, 1)
+                        );
+                        const displayWeekTitle = manualWeekConfig?.title || defaultWeekTitle;
+                        const displayWeekSubtitle = manualWeekConfig?.message || activeStudent.motivationalMessage;
+
+                        return (
+                          <WeeklyStarBand
+                            key={`week-stars-${weekEndThursday}`}
+                            stars={weekRating.stars}
+                            autoStars={weekRating.autoStars}
+                            isManualOverride={weekRating.isManual}
+                            idPrefix={`week-stars-${weekEndThursday}`}
+                            title={displayWeekTitle}
+                            subtitle={displayWeekSubtitle}
+                            isTeacherMode={isTeacherMode}
+                            isPastWeek={!isCurrent}
+                            onSaveWeeklySettings={(settings) => {
+                              handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, settings);
+                            }}
+                            onUpdateMotivationalMessage={(newMsg, newTitle) => {
+                              handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, {
+                                message: newMsg,
+                                title: newTitle || displayWeekTitle,
+                                manualStars: weekRating.stars,
+                                disableAuto: weekRating.isManual,
+                              });
+                            }}
+                          />
+                        );
+                      })()}
                     </div>
                   );
                 });
@@ -1136,6 +1418,9 @@ export default function App() {
                 onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
               />
             )}
+
+            {/* Bottom Breathing Room Spacer to guarantee full visibility above bottom switcher */}
+            <div id="homework-list-bottom-spacer" className="h-6 sm:h-8 w-full shrink-0" aria-hidden="true" />
           </div>
         </div>
       </main>
@@ -1201,6 +1486,7 @@ export default function App() {
           isTeacherMode={isTeacherMode}
           onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
           onUpdateStudentPhoto={handleUpdateStudentPhoto}
+          onUpdateStudentShareToken={handleSaveStudentShareToken}
         />
       )}
 

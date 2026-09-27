@@ -130,29 +130,53 @@ export async function fetchAllDataFromSupabase(): Promise<{
 
     // Helper to find matching entries for a student whether student_id matches exact ID or student name/slug
     const getEntriesForStudent = (stId: string, stName: string, stArabicName?: string | null): Entry[] => {
+      let rawEntries: Entry[] = [];
+
       // 1. Direct match on stId
       if (entriesByStudentId[stId] && entriesByStudentId[stId].length > 0) {
-        return entriesByStudentId[stId];
-      }
-      // 2. Try normalized slug matches (e.g. 'ali' <-> 'student-ali', 'ibrahim' <-> 'student-ibrahim')
-      const lowerId = stId.toLowerCase();
-      const lowerName = (stName || '').toLowerCase().trim();
-      const shortId = lowerId.replace(/^student-/, '');
+        rawEntries = entriesByStudentId[stId];
+      } else {
+        // 2. Try normalized slug matches (e.g. 'musab' <-> 'student-musab', 'ali' <-> 'student-ali')
+        const lowerId = stId.toLowerCase();
+        const lowerName = (stName || '').toLowerCase().trim();
+        const shortId = lowerId.replace(/^student-/, '');
 
-      for (const [key, entries] of Object.entries(entriesByStudentId)) {
-        const lowerKey = key.toLowerCase().trim();
-        const shortKey = lowerKey.replace(/^student-/, '');
-        if (
-          lowerKey === lowerId ||
-          shortKey === shortId ||
-          shortKey === lowerName ||
-          lowerKey === lowerName ||
-          (stArabicName && lowerKey.includes(stArabicName.trim()))
-        ) {
-          return entries;
+        for (const [key, entries] of Object.entries(entriesByStudentId)) {
+          const lowerKey = key.toLowerCase().trim();
+          const shortKey = lowerKey.replace(/^student-/, '');
+          if (
+            lowerKey === lowerId ||
+            shortKey === shortId ||
+            shortKey === lowerName ||
+            lowerKey === lowerName ||
+            (stArabicName && lowerKey.includes(stArabicName.trim()))
+          ) {
+            rawEntries = entries;
+            break;
+          }
         }
       }
-      return [];
+
+      // Crucial Deduplication: Ensure each date has exactly ONE entry per student
+      // If duplicates exist for the same date, prefer the newer/active entry
+      const uniqueByDateMap = new Map<string, Entry>();
+      for (const entry of rawEntries) {
+        if (!uniqueByDateMap.has(entry.date)) {
+          uniqueByDateMap.set(entry.date, entry);
+        } else {
+          // If already exists for this date, pick the one with more information or newer id
+          const existing = uniqueByDateMap.get(entry.date)!;
+          const isCurrentBetter =
+            (entry.hifzGrade !== null && existing.hifzGrade === null) ||
+            (entry.murajaaGrade !== null && existing.murajaaGrade === null) ||
+            (entry.id.startsWith('entry-') && !existing.id.startsWith('entry-'));
+          if (isCurrentBetter) {
+            uniqueByDateMap.set(entry.date, entry);
+          }
+        }
+      }
+
+      return Array.from(uniqueByDateMap.values()).sort((a, b) => b.date.localeCompare(a.date));
     };
 
     // Assemble Students

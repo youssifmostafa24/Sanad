@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { GradeValue } from '../types';
+import { CustomSelectDropdown, DropdownOption } from './CustomSelectDropdown';
 
 interface GradeBadgeProps {
   grade: GradeValue | null;
@@ -16,62 +18,41 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
   idPrefix = 'grade-badge',
   className = '',
 }) => {
-  if (editable && onChange) {
-    return (
-      <div className={`relative inline-flex items-center shrink-0 ${className}`} id={`${idPrefix}-select-container`} dir="ltr">
-        <select
-          id={`${idPrefix}-select`}
-          value={grade === null ? '' : String(grade)}
-          onChange={(e) => {
-            const val = e.target.value;
-            onChange(val === '' ? null : (Number(val) as GradeValue));
-          }}
-          className={`h-[26px] sm:h-[30px] md:h-[34px] text-xs sm:text-[13px] md:text-sm font-bold pl-2 sm:pl-3 md:pl-3.5 pr-5 sm:pr-6 md:pr-7 text-left rounded-full transition-all cursor-pointer outline-none border focus:ring-1 focus:ring-[#B8860B]/40 appearance-none shadow-2xs ${
-            grade === null
-              ? 'bg-[#F4F5F7] text-[#5B6478] border-gray-200'
-              : grade === 100
-              ? 'bg-[#E2F7EB] text-[#0E5C56] border-[#A3E6C3]'
-              : grade === 80
-              ? 'bg-[#EAF6EE] text-[#166534] border-[#BBF7D0]'
-              : grade === 60
-              ? 'bg-[#FEF9C3] text-[#854D0E] border-[#FDE047]'
-              : grade === 40
-              ? 'bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]'
-              : 'bg-[#EF4444]/20 text-[#7F1D1D] border-[#EF4444]/40'
-          }`}
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%235B6478'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 0.35rem center',
-            backgroundSize: '0.7em',
-          }}
-        >
-          <option value="">—</option>
-          <option value="100">✅✅ 100</option>
-          <option value="80">✅ 80</option>
-          <option value="60">🟨 60</option>
-          <option value="40">❌ 40</option>
-          <option value="20">❌❌ 20</option>
-        </select>
-      </div>
-    );
-  }
+  const [showInfo, setShowInfo] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Read-only view (Student Mode)
-  if (grade === null) {
-    return (
-      <span
-        id={`${idPrefix}-pending`}
-        dir="ltr"
-        className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-4 shrink-0 inline-flex items-center justify-center rounded-full bg-[#F4F5F7] text-[#5B6478] border border-gray-200 text-xs sm:text-[13px] md:text-sm font-bold select-none whitespace-nowrap ${className}`}
-        title="قيد الانتظار"
-      >
-        —
-      </span>
-    );
-  }
+  // Close info popover on click outside or Escape
+  useEffect(() => {
+    if (!showInfo) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowInfo(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowInfo(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showInfo]);
 
-  const getBadgeStyle = (val: GradeValue) => {
+  const getBadgeStyle = (val: GradeValue | null) => {
+    if (val === null) {
+      return {
+        bg: 'bg-[#F4F5F7]',
+        text: 'text-[#5B6478]',
+        border: 'border-gray-200',
+        icon: '—',
+        score: '—',
+        label: 'قيد التقييم',
+      };
+    }
     switch (val) {
       case 100:
         return {
@@ -80,6 +61,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           border: 'border-[#A3E6C3]',
           icon: '✅✅',
           score: 100,
+          label: 'ممتاز جداً (متقن بدون أخطاء)',
         };
       case 80:
         return {
@@ -88,6 +70,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           border: 'border-[#BBF7D0]',
           icon: '✅',
           score: 80,
+          label: 'جيد جداً (خطأ أو تنبيه خفيف)',
         };
       case 60:
         return {
@@ -96,6 +79,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           border: 'border-[#FDE047]',
           icon: '🟨',
           score: 60,
+          label: 'جيد (يحتاج تثبيت ومراجعة)',
         };
       case 40:
         return {
@@ -104,6 +88,7 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           border: 'border-[#FCA5A5]',
           icon: '❌',
           score: 40,
+          label: 'يحتاج إعادة تسميع',
         };
       case 20:
         return {
@@ -112,21 +97,179 @@ export const GradeBadge: React.FC<GradeBadgeProps> = ({
           border: 'border-[#EF4444]/40',
           icon: '❌❌',
           score: 20,
+          label: 'إعادة وتثبيت كامل',
         };
     }
   };
 
   const style = getBadgeStyle(grade);
 
+  const gradeOptions: DropdownOption<GradeValue | null>[] = [
+    {
+      value: null,
+      label: 'بدون تقييم',
+      badgeContent: '—',
+      badgeStyle: 'bg-[#F4F5F7] text-[#5B6478] border-gray-200',
+    },
+    {
+      value: 100,
+      label: '100 (ممتاز جداً)',
+      badgeContent: (
+        <span className="flex items-center gap-1 font-sans">
+          <span>✅✅</span>
+          <span>100</span>
+        </span>
+      ),
+      badgeStyle: 'bg-[#E2F7EB] text-[#0E5C56] border-[#A3E6C3]',
+    },
+    {
+      value: 80,
+      label: '80 (جيد جداً)',
+      badgeContent: (
+        <span className="flex items-center gap-1 font-sans">
+          <span>✅</span>
+          <span>80</span>
+        </span>
+      ),
+      badgeStyle: 'bg-[#EAF6EE] text-[#166534] border-[#BBF7D0]',
+    },
+    {
+      value: 60,
+      label: '60 (جيد)',
+      badgeContent: (
+        <span className="flex items-center gap-1 font-sans">
+          <span>🟨</span>
+          <span>60</span>
+        </span>
+      ),
+      badgeStyle: 'bg-[#FEF9C3] text-[#854D0E] border-[#FDE047]',
+    },
+    {
+      value: 40,
+      label: '40 (يحتاج مراجعة)',
+      badgeContent: (
+        <span className="flex items-center gap-1 font-sans">
+          <span>❌</span>
+          <span>40</span>
+        </span>
+      ),
+      badgeStyle: 'bg-[#FEE2E2] text-[#991B1B] border-[#FCA5A5]',
+    },
+    {
+      value: 20,
+      label: '20 (إعادة وتثبيت)',
+      badgeContent: (
+        <span className="flex items-center gap-1 font-sans">
+          <span>❌❌</span>
+          <span>20</span>
+        </span>
+      ),
+      badgeStyle: 'bg-[#EF4444]/20 text-[#7F1D1D] border-[#EF4444]/40',
+    },
+  ];
+
+  // In Editable (Teacher) Mode: matches exact size, padding, and proportions of student mode badge
+  if (editable && onChange) {
+    return (
+      <div
+        className={`relative inline-flex items-center shrink-0 min-w-[38px] min-h-[38px] justify-center ${className}`}
+        id={`${idPrefix}-select-container`}
+        dir="ltr"
+      >
+        <button
+          ref={triggerRef}
+          type="button"
+          id={`${idPrefix}-trigger`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsDropdownOpen((prev) => !prev);
+          }}
+          className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-3.5 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-full text-xs sm:text-[13px] md:text-sm font-bold ${style.bg} ${style.text} border ${style.border} shadow-2xs whitespace-nowrap select-none cursor-pointer active:scale-95 transition-transform`}
+          title="اضغط لتغيير درجة التقييم"
+          aria-label="تحديد درجة التقييم"
+          aria-expanded={isDropdownOpen}
+          aria-haspopup="listbox"
+        >
+          <span className="text-[10px] sm:text-[11.5px] md:text-xs leading-none">{style.icon}</span>
+          <span className="tabular-nums font-sans leading-none">{style.score}</span>
+        </button>
+
+        <CustomSelectDropdown<GradeValue | null>
+          isOpen={isDropdownOpen}
+          onClose={() => setIsDropdownOpen(false)}
+          triggerRef={triggerRef}
+          selectedValue={grade}
+          onSelect={(newGrade) => {
+            onChange(newGrade);
+          }}
+          title="تحديد درجة التقييم"
+          width={250}
+          align="right"
+          dir="rtl"
+          idPrefix={idPrefix}
+          options={gradeOptions}
+        />
+      </div>
+    );
+  }
+
+  // Priority 2.3 & 3.4: In Student Mode: tap to show explanation sheet on touch devices
   return (
-    <span
-      id={`${idPrefix}-val`}
-      dir="ltr"
-      title={String(style.score)}
-      className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-4 shrink-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-full text-xs sm:text-[13px] md:text-sm font-bold ${style.bg} ${style.text} border ${style.border} shadow-2xs whitespace-nowrap select-none ${className}`}
-    >
-      <span className="text-[10px] sm:text-[11.5px] md:text-xs leading-none">{style.icon}</span>
-      <span className="tabular-nums font-sans leading-none">{style.score}</span>
-    </span>
+    <div ref={containerRef} className={`relative inline-flex items-center shrink-0 min-w-[38px] min-h-[38px] justify-center ${className}`}>
+      <button
+        type="button"
+        id={`${idPrefix}-val`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowInfo((prev) => !prev);
+        }}
+        dir="ltr"
+        className={`h-[26px] sm:h-[30px] md:h-[34px] px-2.5 sm:px-3 md:px-3.5 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-full text-xs sm:text-[13px] md:text-sm font-bold ${style.bg} ${style.text} border ${style.border} shadow-2xs whitespace-nowrap select-none cursor-pointer active:scale-95 transition-transform`}
+        title={`التقييم: ${style.score} (${style.label}) - اضغط للتفاصيل`}
+        aria-label={`التقييم: ${style.score}`}
+      >
+        <span className="text-[10px] sm:text-[11.5px] md:text-xs leading-none">{style.icon}</span>
+        <span className="tabular-nums font-sans leading-none">{style.score}</span>
+      </button>
+
+      {/* Tap Explanation Popover for Students (Priority 2.3) */}
+      {showInfo && (
+        <div
+          id={`${idPrefix}-info-popover`}
+          className="absolute top-full mt-2 left-0 z-50 w-52 bg-[#FAF6EE] text-[#1F2A3D] rounded-2xl shadow-xl border border-[#B8860B]/35 p-3 text-right font-sans select-none animate-in fade-in zoom-in-95 duration-100"
+          onClick={(e) => e.stopPropagation()}
+          dir="rtl"
+        >
+          <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#B8860B]/20">
+            <span className="text-xs font-bold text-[#0E5C56]">دليل درجات التقييم</span>
+            <button
+              type="button"
+              onClick={() => setShowInfo(false)}
+              className="p-0.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex items-center gap-2 p-1 rounded-lg bg-[#E2F7EB] text-[#0E5C56] font-bold">
+              <span>✅✅ 100</span>
+              <span className="text-[10px] font-normal">ممتاز ومتقن</span>
+            </div>
+            <div className="flex items-center gap-2 p-1 rounded-lg bg-[#EAF6EE] text-[#166534] font-bold">
+              <span>✅ 80</span>
+              <span className="text-[10px] font-normal">جيد جداً</span>
+            </div>
+            <div className="flex items-center gap-2 p-1 rounded-lg bg-[#FEF9C3] text-[#854D0E] font-bold">
+              <span>🟨 60</span>
+              <span className="text-[10px] font-normal">جيد (مراجعة)</span>
+            </div>
+            <div className="flex items-center gap-2 p-1 rounded-lg bg-[#FEE2E2] text-[#991B1B] font-bold">
+              <span>❌ 40</span>
+              <span className="text-[10px] font-normal">يحتاج إعادة</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

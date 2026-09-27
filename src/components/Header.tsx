@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { KeyRound, Menu, Home, Mic } from 'lucide-react';
+import { KeyRound, Menu, Home, Mic, Database } from 'lucide-react';
 import { Family } from '../types';
 import { verifyTeacherPassword } from '../utils/authUtils';
 
@@ -16,6 +16,7 @@ interface HeaderProps {
   isTeacherAuthenticated: boolean;
   onTeacherLoginSuccess: () => void;
   onOpenVoiceDictation?: () => void;
+  isSupabaseConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,11 +32,14 @@ export const Header: React.FC<HeaderProps> = ({
   isTeacherAuthenticated,
   onTeacherLoginSuccess,
   onOpenVoiceDictation,
+  isSupabaseConnected,
 }) => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [promptTarget, setPromptTarget] = useState<'teacher' | 'portal'>('teacher');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showSupabaseTooltip, setShowSupabaseTooltip] = useState(false);
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
         onEnterTeacherMode();
       }
     } else {
-      setErrorMsg('كلمة المرور غير صحيحة');
+      setErrorMsg('Incorrect password');
       inputRef.current?.select();
     }
   };
@@ -101,20 +105,20 @@ export const Header: React.FC<HeaderProps> = ({
             id="hamburger-sidebar-btn"
             type="button"
             onClick={onOpenSidebar}
-            aria-label="قائمة الطالب الحالية"
-            title="بيانات وإعدادات الطالب الحالي / Student Menu"
+            aria-label="Student Menu"
+            title="Student Menu & Settings"
             className="p-1.5 -ml-1 rounded-lg text-[#F1E7CE] hover:text-white hover:bg-white/10 active:bg-white/20 transition-all cursor-pointer flex items-center justify-center group shrink-0"
           >
             <Menu className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-105" />
           </button>
 
-          {/* Main Portal Button ("القائمة الرئيسية") with Quran Homework Logo */}
+          {/* Main Portal Button with Quran Homework Logo */}
           <button
             id="portal-home-nav-btn"
             type="button"
             onClick={handlePortalClick}
-            aria-label="القائمة الرئيسية للأسر - Quran Homework"
-            title="القائمة الرئيسية للأسر / Quran Homework"
+            aria-label="Main Portal - Quran Homework"
+            title="Main Portal / Quran Homework"
             className="p-1 rounded-lg hover:bg-white/10 active:bg-white/20 transition-all cursor-pointer flex items-center justify-center group shrink-0"
           >
             <img
@@ -126,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Large Student Name */}
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F1E7CE] truncate max-w-[160px] sm:max-w-xs">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F1E7CE] truncate max-w-[160px] sm:max-w-xs font-sans">
               {activeStudentName || 'Student'}
             </h1>
           </div>
@@ -141,12 +145,55 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onOpenVoiceDictation}
               className="px-2.5 sm:px-3 py-1 bg-gradient-to-r from-[#B8860B] to-[#976D07] hover:brightness-110 text-white rounded-lg text-xs font-bold tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
-              title="إملاء صوتي للواجب بالذكاء الاصطناعي (AI)"
+              title="Voice Dictation with AI"
             >
               <Mic className="w-3.5 h-3.5 text-[#F1E7CE] animate-pulse" />
-              <span className="hidden sm:inline">إملاء صوتي (AI)</span>
-              <span className="sm:hidden">إملاء</span>
+              <span className="hidden sm:inline">Voice AI</span>
+              <span className="sm:hidden">Voice</span>
             </button>
+          )}
+
+          {/* Subtle Supabase Connection Status (Subtle Icon + Small Green Connected Dot) */}
+          {isSupabaseConnected && (
+            <div className="relative">
+              <button
+                id="supabase-header-status-btn"
+                type="button"
+                onClick={() => {
+                  setShowSupabaseTooltip((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+                      tooltipTimeoutRef.current = setTimeout(() => setShowSupabaseTooltip(false), 2500);
+                    }
+                    return next;
+                  });
+                }}
+                onMouseEnter={() => setShowSupabaseTooltip(true)}
+                onMouseLeave={() => {
+                  if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+                  setShowSupabaseTooltip(false);
+                }}
+                aria-label="Supabase متصل"
+                title="Supabase متصل"
+                className="relative p-1.5 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-[#F1E7CE] hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
+              >
+                <Database className="w-4 h-4 text-[#E5C378]" />
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-[#0E5C56] shadow-[0_0_4px_#34d399]" />
+              </button>
+
+              {/* Tooltip visible on hover or tap */}
+              {showSupabaseTooltip && (
+                <div
+                  id="supabase-header-tooltip"
+                  dir="rtl"
+                  className="absolute top-full mt-1.5 right-0 z-50 bg-[#0A423E] text-[#F1E7CE] text-[11px] font-semibold py-1 px-2.5 rounded-lg border border-[#B8860B]/40 shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150 flex items-center gap-1.5"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span>Supabase متصل</span>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Teacher / Back to student mode Button */}
@@ -156,9 +203,9 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onExitTeacherMode}
               className="px-2.5 sm:px-3.5 py-1 bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg text-xs font-bold tracking-wide transition-colors cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
-              title="Student"
+              title="Return to Student View"
             >
-              Student
+              Student View
             </button>
           ) : (
             <div className="relative">
@@ -167,6 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={handleTeacherClick}
                 className="px-2.5 sm:px-3.5 py-1 bg-[#FBF6E8]/10 hover:bg-[#FBF6E8]/20 border border-[#F1E7CE]/30 rounded-lg text-[#F1E7CE] text-xs font-bold tracking-wide flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap active:scale-95"
+                title="Teacher Access"
               >
                 <KeyRound className="w-3.5 h-3.5 text-[#B8860B]" />
                 <span>Teacher</span>
@@ -181,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <form onSubmit={handlePasswordSubmit} className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#B8860B] uppercase tracking-wider">
-                        {promptTarget === 'portal' ? 'القائمة الرئيسية' : 'Teacher Access'}
+                        {promptTarget === 'portal' ? 'Main Portal Access' : 'Teacher Access'}
                       </span>
                     </div>
 
@@ -194,7 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
                         setPassword(e.target.value);
                         setErrorMsg('');
                       }}
-                      placeholder="أدخل كلمة المرور..."
+                      placeholder="Enter password..."
                       className="w-full px-3 py-1.5 text-xs bg-black/30 border border-[#B8860B]/30 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#B8860B] text-center font-mono"
                     />
 
@@ -208,14 +256,14 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={() => setShowPasswordPrompt(false)}
                         className="px-2.5 py-1 text-xs text-[#F1E7CE]/70 hover:text-white cursor-pointer"
                       >
-                        إلغاء
+                        Cancel
                       </button>
                       <button
                         id="teacher-password-submit-btn"
                         type="submit"
                         className="px-3 py-1 text-xs font-bold bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg cursor-pointer transition-colors shadow-2xs"
                       >
-                        فتح
+                        Unlock
                       </button>
                     </div>
                   </form>

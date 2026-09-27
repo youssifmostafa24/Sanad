@@ -27,16 +27,21 @@ export const MonthNavigator: React.FC<MonthNavigatorProps> = ({
   const activeBtnRef = useRef<HTMLButtonElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll the timeline row so the active day stays centered/visible
+  // Auto-scroll the timeline row so the active day stays centered/visible horizontally without affecting page scroll
   useEffect(() => {
-    if (activeBtnRef.current) {
-      activeBtnRef.current.scrollIntoView({
+    if (activeBtnRef.current && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const btn = activeBtnRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const btnRect = btn.getBoundingClientRect();
+      const scrollOffset =
+        btnRect.left - containerRect.left - containerRect.width / 2 + btnRect.width / 2;
+      container.scrollBy({
+        left: scrollOffset,
         behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest',
       });
     }
-  }, [activeEntryId, entries.length]);
+  }, [activeEntryId]);
 
   const todayStr = formatLocalDate(new Date());
 

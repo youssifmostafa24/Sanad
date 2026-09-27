@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowLeft, BookOpen, Check, Edit3 } from 'lucide-react';
+import { X, ArrowRight, BookOpen, Check, Edit3 } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   QURAN_SURAHS,
@@ -25,7 +25,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
   isOpen,
   onClose,
   onSelect,
-  title = 'تحديد الواجب من القرآن الكريم',
+  title = 'Select Quran Homework',
   initialText = '',
 }) => {
   const [isFreeWriting, setIsFreeWriting] = useState<boolean>(false);
@@ -42,7 +42,6 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
     if (isOpen) {
       const parsed = parseQuranHomework(initialText);
       if (parsed) {
-        // If it's a parsed surah >= 18, use dropdowns
         const validSurahNum = Math.max(18, parsed.surahNumber);
         setSelectedSurahNumber(validSurahNum);
         setFromAyah(parsed.fromAyah);
@@ -50,7 +49,6 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
         setFreeText(initialText);
         setIsFreeWriting(false);
       } else if (initialText && initialText.trim()) {
-        // Non-standard text: activate free writing mode
         setSelectedSurahNumber(18);
         setFromAyah(1);
         setToAyah(35);
@@ -71,10 +69,9 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
   const handleSurahChange = (surahNum: number) => {
     setSelectedSurahNumber(surahNum);
     const surah = PICKER_SURAHS.find((s) => s.number === surahNum);
-    if (surah) {
-      setFromAyah(1);
-      setToAyah(Math.min(35, surah.ayahCount));
-    }
+    const maxAyah = surah ? surah.ayahCount : 100;
+    setFromAyah(1);
+    setToAyah(Math.min(toAyah, maxAyah));
   };
 
   const handleFromAyahChange = (val: number) => {
@@ -109,7 +106,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
   return (
     <div
       id="quran-ayah-picker-overlay"
-      dir="rtl"
+      dir="ltr"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
@@ -131,7 +128,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-[#F1E7CE]/80 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
-            title="إغلاق"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -139,12 +136,12 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
 
         {/* Content Body */}
         <div className="p-4 sm:p-5 space-y-4">
-          {/* Free Writing Toggle Switch (matching user image) */}
+          {/* Free Writing Toggle Switch */}
           <div className="flex items-center justify-between bg-white rounded-xl border border-[#B8860B]/25 px-3.5 py-2.5 shadow-2xs">
             <div className="flex items-center gap-2">
               <Edit3 className="w-4 h-4 text-[#0E5C56]" />
               <span className="text-xs sm:text-sm font-bold text-[#1F2A3D]">
-                تفعيل الكتابة الحرة للواجب
+                Custom Text Mode
               </span>
             </div>
 
@@ -168,9 +165,9 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                 }
               }}
               className={`w-13 h-7 rounded-full p-1 transition-colors duration-200 ease-in-out cursor-pointer flex items-center shadow-inner ${
-                isFreeWriting ? 'bg-[#0E5C56] justify-start' : 'bg-[#D1D5DB] justify-end'
+                isFreeWriting ? 'bg-[#0E5C56] justify-end' : 'bg-[#D1D5DB] justify-start'
               }`}
-              title={isFreeWriting ? 'إلغاء الكتابة الحرة والعودة للقوائم' : 'تفعيل الكتابة الحرة'}
+              title={isFreeWriting ? 'Switch back to standard dropdowns' : 'Enable free text typing'}
             >
               <motion.div
                 layout
@@ -188,33 +185,33 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                 htmlFor="picker-free-text-input"
                 className="block text-xs sm:text-sm font-bold text-[#0E5C56]"
               >
-                اكتب نص الواجب المطلوب بحرية:
+                Type homework text freely:
               </label>
               <textarea
                 id="picker-free-text-input"
                 rows={3}
                 value={freeText}
                 onChange={(e) => setFreeText(e.target.value)}
-                placeholder="اكتب الواجب هنا بحرية عبر الكيبورد (مثال: حفظ سورة الكهف من آية 1 إلى 20)..."
-                className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl p-3 text-sm sm:text-base font-bold text-[#1F2A3D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 font-arabic resize-none"
+                placeholder="e.g. Surah Al-Kahf 1 to 20 / سورة الكهف من 1 إلى 20..."
+                className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl p-3 text-sm sm:text-base font-bold text-[#1F2A3D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 font-sans resize-none"
                 autoFocus
               />
             </div>
           ) : (
-            /* Quran Surahs & Ayahs Dropdowns (Surah 18 to 114 only) */
+            /* Quran Surahs & Ayahs Dropdowns */
             <div className="bg-white rounded-xl border border-[#B8860B]/25 p-3.5 shadow-2xs space-y-3">
               <p className="text-xs text-[#5B6478] font-medium">
-                اختر السورة والآيات من القوائم المنسدلة (من سورة الكهف إلى سورة الناس):
+                Select Surah and Ayah range from dropdowns:
               </p>
 
               <div className="flex items-center gap-2 sm:gap-3 w-full">
-                {/* Dropdown 1: قائمة السور (من الكهف إلى الناس) بخط كبير */}
+                {/* Dropdown 1: Surah */}
                 <div className="flex-1 min-w-0">
                   <label
                     htmlFor="picker-surah-select"
                     className="block text-[11px] font-bold text-[#5B6478] mb-1"
                   >
-                    السورة:
+                    Surah:
                   </label>
                   <select
                     id="picker-surah-select"
@@ -224,26 +221,25 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                   >
                     {PICKER_SURAHS.map((s) => (
                       <option key={s.number} value={s.number}>
-                        سورة {s.arabicName}
+                        {s.arabicName}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Dropdown 2: الآية الصغرى (من) بخط كبير */}
+                {/* Dropdown 2: From Ayah */}
                 <div className="w-20 sm:w-26 shrink-0">
                   <label
                     htmlFor="picker-from-ayah-select"
                     className="block text-[11px] font-bold text-[#5B6478] mb-1 text-center"
                   >
-                    من:
+                    From:
                   </label>
                   <select
                     id="picker-from-ayah-select"
                     value={fromAyah}
                     onChange={(e) => handleFromAyahChange(Number(e.target.value))}
-                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs font-ayah"
-                    title="الرقم الأصغر (من)"
+                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs tabular-nums"
                   >
                     {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
                       <option key={`from-${n}`} value={n}>
@@ -253,34 +249,33 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                   </select>
                 </div>
 
-                {/* Arrow: سهم يوضح من إلى */}
+                {/* Arrow */}
                 <div
                   className="shrink-0 flex items-center justify-center text-[#0E5C56] pt-5 px-0.5"
-                  title="إلى"
+                  title="to"
                 >
-                  <ArrowLeft className="w-5 h-5 font-black stroke-[2.5]" />
+                  <ArrowRight className="w-5 h-5 font-black stroke-[2.5]" />
                 </div>
 
-                {/* Dropdown 3: الآية الكبرى (إلى) بخط كبير */}
+                {/* Dropdown 3: To Ayah */}
                 <div className="w-20 sm:w-26 shrink-0">
                   <label
                     htmlFor="picker-to-ayah-select"
                     className="block text-[11px] font-bold text-[#5B6478] mb-1 text-center"
                   >
-                    إلى:
+                    To:
                   </label>
                   <select
                     id="picker-to-ayah-select"
                     value={toAyah}
                     onChange={(e) => handleToAyahChange(Number(e.target.value))}
-                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs font-ayah"
-                    title="الرقم الأكبر (إلى)"
+                    className="w-full bg-[#FBF6E8]/90 border border-[#B8860B]/35 rounded-xl py-2.5 px-1.5 text-center text-sm sm:text-base font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 cursor-pointer shadow-2xs tabular-nums"
                   >
                     {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => {
                       const isLast = n === currentSurah.ayahCount;
                       return (
                         <option key={`to-${n}`} value={n}>
-                          {isLast && fromAyah === 1 ? `${n} (end-1)` : n}
+                          {isLast && fromAyah === 1 ? `${n} (كاملة)` : n}
                         </option>
                       );
                     })}
@@ -288,10 +283,10 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                 </div>
               </div>
 
-              {/* Helper action: end-1 shortcut button */}
+              {/* Helper action: كاملة shortcut button */}
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#B8860B]/15">
                 <span className="text-[11px] text-[#5B6478] font-medium">
-                  عدد آيات سورة {currentSurah.arabicName}: {currentSurah.ayahCount} آية
+                  Total Ayahs in {currentSurah.name}: {currentSurah.ayahCount}
                 </span>
 
                 <button
@@ -306,9 +301,9 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
                       ? 'bg-[#0E5C56] text-[#F1E7CE] border-[#0E5C56]'
                       : 'text-[#0E5C56] hover:bg-[#0E5C56] hover:text-[#F1E7CE] bg-[#FBF6E8] border-[#B8860B]/30'
                   }`}
-                  title="السورة كاملة (end-1)"
+                  title="كاملة"
                 >
-                  السورة كاملة (end-1)
+                  كاملة
                 </button>
               </div>
             </div>
@@ -321,7 +316,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#5B6478] hover:bg-black/5 border border-gray-300 transition-colors cursor-pointer"
             >
-              إلغاء
+              Cancel
             </button>
             <button
               type="button"
@@ -329,7 +324,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
               className="px-5 py-2 bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <Check className="w-4 h-4 text-[#86EFAC]" />
-              <span>اعتماد الواجب</span>
+              <span>Confirm Homework</span>
             </button>
           </div>
         </div>

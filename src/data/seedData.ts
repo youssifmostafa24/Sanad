@@ -485,20 +485,26 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
       id: 'family-1',
       name: 'Sulaymn + Ibrahim + Ali',
       studentIds: ['student-sulayman', 'student-ibrahim', 'student-ali'],
+      displayOrder: 1,
+      isHidden: false,
     },
     {
       id: 'family-2',
       name: 'Musab + umair + Uthman',
       studentIds: ['student-musab', 'student-umair', 'student-uthman'],
+      displayOrder: 2,
+      isHidden: false,
     },
     {
       id: 'family-3',
       name: 'Hayaa + Yusuf',
       studentIds: ['student-hayaa', 'student-yusuf'],
+      displayOrder: 3,
+      isHidden: false,
     },
   ];
 
-  // Ensure all full-surah entries automatically follow the "1-end" convention
+  // Ensure all full-surah entries automatically follow the "كاملة" convention
   const normalizedStudents = students.map((st) => ({
     ...st,
     entries: st.entries.map((e) => ({

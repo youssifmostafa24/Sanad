@@ -3,19 +3,19 @@ import { X, Calendar, Check, Clock, User } from 'lucide-react';
 import { Family, Student } from '../types';
 
 export const WEEK_DAYS = [
-  { id: 6, label: 'السبت', short: 'Sat' },
-  { id: 0, label: 'الأحد', short: 'Sun' },
-  { id: 1, label: 'الإثنين', short: 'Mon' },
-  { id: 2, label: 'الثلاثاء', short: 'Tue' },
-  { id: 3, label: 'الأربعاء', short: 'Wed' },
-  { id: 4, label: 'الخميس', short: 'Thu' },
-  { id: 5, label: 'الجمعة', short: 'Fri' },
+  { id: 6, label: 'Saturday', short: 'Sat' },
+  { id: 0, label: 'Sunday', short: 'Sun' },
+  { id: 1, label: 'Monday', short: 'Mon' },
+  { id: 2, label: 'Tuesday', short: 'Tue' },
+  { id: 3, label: 'Wednesday', short: 'Wed' },
+  { id: 4, label: 'Thursday', short: 'Thu' },
+  { id: 5, label: 'Friday', short: 'Fri' },
 ];
 
 export function getAttendanceDaysSummary(days?: number[]): string {
-  if (!days || days.length === 0) return 'غير محدد';
-  const labels = days.map((d) => WEEK_DAYS.find((w) => w.id === d)?.label).filter(Boolean);
-  return labels.join('، ');
+  if (!days || days.length === 0) return 'Not set';
+  const labels = days.map((d) => WEEK_DAYS.find((w) => w.id === d)?.short).filter(Boolean);
+  return labels.join(', ');
 }
 
 interface StudentAttendanceModalProps {
@@ -61,14 +61,13 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
           : [1, 5]; // Default Mon & Fri
       });
       setAttendanceMap(initialMap);
-
       if (initialStudentId && familyStudents.some((s) => s.id === initialStudentId)) {
         setSelectedStudentId(initialStudentId);
-      } else if (!selectedStudentId && familyStudents.length > 0) {
+      } else if (familyStudents.length > 0 && !familyStudents.some((s) => s.id === selectedStudentId)) {
         setSelectedStudentId(familyStudents[0].id);
       }
     }
-  }, [isOpen, initialStudentId, students]);
+  }, [isOpen, familyStudents.length, initialStudentId]);
 
   if (!isOpen) return null;
 
@@ -78,10 +77,12 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
   const toggleDayForCurrentStudent = (dayId: number) => {
     if (!currentStudent) return;
     const currentList = attendanceMap[currentStudent.id] || [];
-    const updated = currentList.includes(dayId)
-      ? currentList.filter((d) => d !== dayId)
-      : [...currentList, dayId].sort();
-
+    let updated: number[];
+    if (currentList.includes(dayId)) {
+      updated = currentList.filter((d) => d !== dayId);
+    } else {
+      updated = [...currentList, dayId].sort((a, b) => a - b);
+    }
     setAttendanceMap((prev) => ({
       ...prev,
       [currentStudent.id]: updated,
@@ -92,7 +93,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
     if (!currentStudent) return;
     setAttendanceMap((prev) => ({
       ...prev,
-      [currentStudent.id]: [...presetDays].sort(),
+      [currentStudent.id]: [...presetDays],
     }));
   };
 
@@ -110,7 +111,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
   return (
     <div
       id="student-attendance-overlay"
-      dir="rtl"
+      dir="ltr"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
@@ -125,10 +126,10 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
             <Calendar className="w-5 h-5 text-[#B8860B]" />
             <div>
               <h2 className="text-sm sm:text-base font-bold text-[#F1E7CE]">
-                إعدادات أيام الحضور الخاصة بالطلاب
+                Student Attendance Days
               </h2>
               <p className="text-[11px] text-[#F1E7CE]/80">
-                لكل ولد أيامه المستقلة وجدول تسميعه الخاص — {family.name}
+                Independent recitation schedule per student — {family.name}
               </p>
             </div>
           </div>
@@ -137,7 +138,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-[#F1E7CE]/80 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"
-            title="إغلاق"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -148,7 +149,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
           {/* Student Selector Tabs */}
           <div>
             <label className="block text-xs font-bold text-[#0E5C56] mb-2">
-              اختر الطالب لتحديد أيامه الخاصة:
+              Select student to configure attendance:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {familyStudents.map((st) => {
@@ -159,7 +160,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
                     key={st.id}
                     type="button"
                     onClick={() => setSelectedStudentId(st.id)}
-                    className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer flex flex-col gap-1 relative ${
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 relative ${
                       isSelected
                         ? 'bg-[#0E5C56] text-[#F1E7CE] border-[#0E5C56] shadow-md ring-2 ring-[#B8860B]/50'
                         : 'bg-white hover:bg-[#FBF6E8] text-[#1F2A3D] border-[#B8860B]/25 hover:border-[#B8860B]/50'
@@ -189,7 +190,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
                       </span>
                     )}
                     <span className={`text-[9.5px] font-mono mt-0.5 truncate ${isSelected ? 'text-[#E6CA65]' : 'text-[#0E5C56]'}`}>
-                      {daysForSt.length} أيام: {getAttendanceDaysSummary(daysForSt)}
+                      {daysForSt.length} days: {getAttendanceDaysSummary(daysForSt)}
                     </span>
                   </button>
                 );
@@ -210,10 +211,10 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-[#0E5C56]">
-                      أيام حضور: {currentStudent.name} {currentStudent.arabicName && `(${currentStudent.arabicName})`}
+                      Schedule for: {currentStudent.name} {currentStudent.arabicName && `(${currentStudent.arabicName})`}
                     </h3>
                     <p className="text-[10.5px] text-[#5B6478]">
-                      عند النقر على &quot;تكرار +&quot;، سينتقل الواجب إلى يوم الحضور التالي الخاص بهذا الطالب.
+                      Duplicating homework moves it automatically to this student&apos;s next scheduled day.
                     </p>
                   </div>
                 </div>
@@ -222,7 +223,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
               {/* Days Grid */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-[#1F2A3D]">
-                  حدد أيام الأسبوع للطالب ({currentStudent.name}):
+                  Select attendance days ({currentStudent.name}):
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {WEEK_DAYS.map((day) => {
@@ -249,7 +250,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
               {/* Presets */}
               <div className="space-y-1 pt-1">
                 <span className="text-[11px] font-semibold text-[#5B6478] block">
-                  نماذج سريعة:
+                  Quick Presets:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   <button
@@ -257,28 +258,28 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
                     onClick={() => applyPreset([1, 5])}
                     className="px-2.5 py-1 rounded-lg text-[11px] bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] font-medium transition-colors cursor-pointer"
                   >
-                    الإثنين والجمعة
+                    Mon & Fri
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset([0, 2, 4])}
                     className="px-2.5 py-1 rounded-lg text-[11px] bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] font-medium transition-colors cursor-pointer"
                   >
-                    الأحد، الثلاثاء، الخميس
+                    Sun, Tue, Thu
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset([6, 1, 3])}
                     className="px-2.5 py-1 rounded-lg text-[11px] bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] font-medium transition-colors cursor-pointer"
                   >
-                    السبت، الإثنين، الأربعاء
+                    Sat, Mon, Wed
                   </button>
                   <button
                     type="button"
                     onClick={() => applyPreset([6, 0, 1, 2, 3, 4])}
                     className="px-2.5 py-1 rounded-lg text-[11px] bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] font-medium transition-colors cursor-pointer"
                   >
-                    يومي (السبت - الخميس)
+                    Daily (Sat - Thu)
                   </button>
                 </div>
               </div>
@@ -287,10 +288,10 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
               <div className="p-2.5 bg-[#FBF6E8] rounded-xl border border-[#B8860B]/20 flex items-start gap-2 text-xs text-[#5B6478]">
                 <Clock className="w-4 h-4 text-[#B8860B] shrink-0 mt-0.5" />
                 <div>
-                  جدول <b>{currentStudent.name}</b>:{' '}
+                  Schedule for <b>{currentStudent.name}</b>:{' '}
                   <b className="text-[#0E5C56]">
                     {currentDays.length === 0
-                      ? 'لم يتم تحديد أي يوم'
+                      ? 'No days selected'
                       : getAttendanceDaysSummary(currentDays)}
                   </b>
                 </div>
@@ -302,7 +303,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
         {/* Footer Actions */}
         <div className="px-4 py-3 bg-[#F1E7CE]/60 border-t border-[#B8860B]/20 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-[#5B6478]">
-            يتم حفظ أيام كل طالب على حدة
+            Saves schedule per student individually
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -310,7 +311,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 border border-gray-300 transition-colors cursor-pointer"
             >
-              إلغاء
+              Cancel
             </button>
             <button
               type="button"
@@ -318,7 +319,7 @@ export const StudentAttendanceModal: React.FC<StudentAttendanceModalProps> = ({
               className="px-5 py-2 bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <Check className="w-4 h-4" />
-              <span>حفظ الإعدادات</span>
+              <span>Save Schedule</span>
             </button>
           </div>
         </div>

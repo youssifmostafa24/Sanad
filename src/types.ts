@@ -19,8 +19,11 @@ export interface Entry {
 }
 
 export interface ManualWeeklyStars {
-  weekEndDate: string; // YYYY-MM-DD (the Friday that ends the week)
+  weekEndDate: string; // YYYY-MM-DD (the Thursday/Friday that ends the week)
   stars: number; // 0 to 5
+  disabledAuto?: boolean; // When true, automatic star calculation is disabled
+  title?: string; // Optional custom title for this specific week
+  message?: string; // Optional custom motivational message for this specific week
 }
 
 export interface Student {
@@ -39,6 +42,7 @@ export interface Student {
   tilawaAyah?: number; // Current Ayah number within the selected Surah
   memorizationFocus?: string; // Things student needs to focus on in memorization
   motivationalMessage?: string; // Teacher custom motivational message displayed in the weekly star banner
+  shareToken?: string; // Revocable security token for student direct link
 }
 
 export interface Family {
@@ -46,6 +50,8 @@ export interface Family {
   name: string;
   studentIds: string[];
   attendanceDays?: number[]; // Default attendance days for the family
+  displayOrder?: number; // Teacher-controlled display order
+  isHidden?: boolean; // Whether family is archived/hidden
 }
 
 export type TimeRange = 'week' | 'month' | 'year';

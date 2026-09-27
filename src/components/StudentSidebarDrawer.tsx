@@ -8,6 +8,7 @@ import {
   Sparkles,
   Target,
   Home,
+  Bookmark,
 } from 'lucide-react';
 import { Student } from '../types';
 import { QURAN_SURAHS, QuranSurah } from '../data/quranSurahs';
@@ -84,7 +85,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
             className="fixed inset-0 bg-black/45 backdrop-blur-xs cursor-pointer"
           />
 
-          {/* Slide-out Drawer Panel (From Left Side) - Dedicated to Current Student */}
+          {/* Slide-out Drawer Panel (From Left Side for LTR) - Dedicated to Current Student */}
           <motion.div
             id="sidebar-panel"
             initial={{ x: '-100%' }}
@@ -123,7 +124,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                       {student.name}
                     </h2>
                     {student.arabicName && (
-                      <span className="text-xs text-[#F1E7CE]/90 font-serif">
+                      <span className="text-xs text-[#F1E7CE]/80 font-serif">
                         ({student.arabicName})
                       </span>
                     )}
@@ -139,28 +140,29 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                 id="close-sidebar-btn"
                 type="button"
                 onClick={onClose}
-                aria-label="Close menu"
+                aria-label="Close sidebar"
                 className="p-1.5 rounded-lg text-[#F1E7CE] hover:text-white hover:bg-white/15 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Drawer Body: The Requested Items in English */}
+            {/* Drawer Body: All English navigation */}
             <div className="p-4 space-y-4 flex-1" id="student-sidebar-content">
               {/* =========================================================================
-                  Section 1: Current Recitation (Tilawa)
+                  Section 1: Current Tilawa (Reading Bookmark)
                  ========================================================================= */}
               <section id="section-current-tilawa" className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#0E5C56]">
                     <BookOpen className="w-4 h-4 text-[#B8860B]" />
                     <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      Current Recitation (Tilawa)
+                      Current Tilawa
                     </h3>
                   </div>
-                  <span className="text-[10px] font-bold text-[#8A6305] bg-[#B8860B]/15 px-2 py-0.5 rounded-full">
-                    Bookmark
+                  <span className="flex items-center gap-1 text-[10.5px] font-bold text-[#8A6305] bg-[#B8860B]/15 px-2.5 py-0.5 rounded-full">
+                    <Bookmark className="w-3 h-3 text-[#B8860B]" />
+                    <span>Bookmark</span>
                   </span>
                 </div>
 
@@ -216,18 +218,18 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
 
                       {/* Summary badge */}
                       <div className="pt-2 border-t border-[#B8860B]/15 flex items-center justify-between text-[11px] text-[#0E5C56] bg-[#FAF6EE] px-2.5 py-1.5 rounded-xl">
-                        <span className="font-semibold text-[#5B6478]">Current bookmark:</span>
+                        <span className="font-semibold text-[#5B6478]">Current Position:</span>
                         <span className="font-bold text-[#0E5C56]">
-                          Surah {currentSurah.name} ({currentSurah.arabicName}) : {currentAyah}
+                          Surah {currentSurah.name} ({currentSurah.arabicName}) : Ayah {currentAyah}
                         </span>
                       </div>
                     </>
                   ) : (
                     /* Summary visual badge in Student mode */
                     <div className="flex items-center justify-between text-xs sm:text-sm text-[#0E5C56] bg-[#FAF6EE] px-3.5 py-2.5 rounded-xl border border-[#B8860B]/20">
-                      <span className="font-semibold text-[#5B6478]">Current bookmark:</span>
+                      <span className="font-semibold text-[#5B6478]">Current Bookmark:</span>
                       <span className="font-bold text-[#0E5C56]">
-                        Surah {currentSurah.name} ({currentSurah.arabicName}) : {currentAyah}
+                        Surah {currentSurah.name} ({currentSurah.arabicName}) : Ayah {currentAyah}
                       </span>
                     </div>
                   )}
@@ -235,7 +237,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
               </section>
 
               {/* =========================================================================
-                  Section 2: Memorization Focus & Notes Shortcut Button
+                  Section 2: Memorization Focus Notes
                  ========================================================================= */}
               {onOpenFocusNotes && (
                 <section id="section-focus-notes-nav">
@@ -246,18 +248,18 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                       onClose();
                       onOpenFocusNotes(student);
                     }}
-                    className="w-full p-3 rounded-2xl bg-white hover:bg-[#FAF6EE] border border-[#B8860B]/30 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99]"
+                    className="w-full p-3 rounded-2xl bg-white hover:bg-[#FAF6EE] border border-[#B8860B]/30 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99] text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#0E5C56]/10 border border-[#0E5C56]/20 flex items-center justify-center text-[#0E5C56] group-hover:scale-105 transition-transform">
+                      <div className="w-9 h-9 rounded-xl bg-[#0E5C56]/10 border border-[#0E5C56]/20 flex items-center justify-center text-[#0E5C56] group-hover:scale-105 transition-transform shrink-0">
                         <Target className="w-4.5 h-4.5 text-[#0E5C56]" />
                       </div>
-                      <div className="text-left">
+                      <div>
                         <span className="font-bold text-xs sm:text-sm text-[#0E5C56] block">
                           Memorization Focus & Notes
                         </span>
                         <span className="text-[10px] sm:text-[11px] text-[#5B6478] block">
-                          {student.memorizationFocus ? 'View teacher guidance' : 'Focus areas & recitation'}
+                          {student.memorizationFocus ? 'View teacher tips and focal review items' : 'Key review points & teacher guidance'}
                         </span>
                       </div>
                     </div>
@@ -270,7 +272,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
               )}
 
               {/* =========================================================================
-                  Section 3: Student Settings Button
+                  Section 3: Student Settings
                  ========================================================================= */}
               <section id="section-student-settings-nav">
                 <button
@@ -280,20 +282,20 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                     onClose();
                     onOpenStudentSettings?.(student);
                   }}
-                  className="w-full p-3.5 rounded-2xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border border-[#B8860B]/35 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99]"
+                  className="w-full p-3.5 rounded-2xl bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border border-[#B8860B]/35 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99] text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#F1E7CE]/15 border border-[#B8860B]/30 flex items-center justify-center text-[#B8860B] group-hover:scale-105 transition-transform">
+                    <div className="w-9 h-9 rounded-xl bg-[#F1E7CE]/15 border border-[#B8860B]/30 flex items-center justify-center text-[#B8860B] group-hover:scale-105 transition-transform shrink-0">
                       <Settings className="w-4.5 h-4.5 text-[#F1E7CE]" />
                     </div>
-                    <div className="text-left">
+                    <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-xs sm:text-sm text-[#F1E7CE]">
                           Student Settings
                         </span>
                       </div>
                       <span className="block text-[10px] sm:text-[11px] text-[#F1E7CE]/75 mt-0.5">
-                        Attendance days & share link
+                        Photo, attendance days & shareable link
                       </span>
                     </div>
                   </div>
@@ -305,7 +307,7 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
               </section>
 
               {/* =========================================================================
-                  Section 4: Complementary Utilities
+                  Section 4: Additional Navigation Tools
                  ========================================================================= */}
               <div className="pt-2 border-t border-[#B8860B]/20 space-y-2">
                 {onOpenSurahProgress && (
@@ -316,13 +318,13 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                       onClose();
                       onOpenSurahProgress(student);
                     }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#FBF6E8] border border-[#B8860B]/25 text-[#0E5C56] text-xs font-bold transition-colors cursor-pointer flex items-center justify-between shadow-2xs group"
+                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#FBF6E8] border border-[#B8860B]/25 text-[#0E5C56] text-xs font-bold transition-colors cursor-pointer flex items-center justify-between shadow-2xs group text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-[#B8860B] group-hover:scale-110 transition-transform" />
-                      <span>Quran Memorization Tracker (114 Surahs)</span>
+                      <Sparkles className="w-4 h-4 text-[#B8860B] group-hover:scale-110 transition-transform shrink-0" />
+                      <span>Surah Memorization Tracker (114 Surahs)</span>
                     </div>
-                    <span className="text-[10px] text-[#8A6305] bg-[#B8860B]/15 px-2 py-0.5 rounded-full font-sans">
+                    <span className="text-[10px] text-[#8A6305] bg-[#B8860B]/15 px-2 py-0.5 rounded-full font-sans font-semibold">
                       View
                     </span>
                   </button>
@@ -336,14 +338,14 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                       onClose();
                       onOpenPortal();
                     }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#FBF6E8] border border-[#B8860B]/25 text-[#5B6478] hover:text-[#0E5C56] text-xs font-semibold transition-colors cursor-pointer flex items-center justify-between shadow-2xs group"
+                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-[#FBF6E8] border border-[#B8860B]/25 text-[#5B6478] hover:text-[#0E5C56] text-xs font-semibold transition-colors cursor-pointer flex items-center justify-between shadow-2xs group text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Home className="w-4 h-4 text-[#B8860B]" />
+                      <Home className="w-4 h-4 text-[#B8860B] shrink-0" />
                       <span>Main Portal (All Families)</span>
                     </div>
-                    <span className="text-[10px] text-[#5B6478] font-sans">
-                      Home
+                    <span className="text-[10px] text-[#5B6478] font-sans font-medium">
+                      Portal
                     </span>
                   </button>
                 )}
