@@ -55,11 +55,9 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
     label: opt.label,
     badgeContent: (
       <span
-        className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-[9px] font-bold text-white shadow-2xs"
+        className="w-3.5 h-3.5 rounded-full inline-flex items-center justify-center shadow-2xs"
         style={{ backgroundColor: opt.bgColor }}
-      >
-        {opt.value === 'strong' ? '✓' : opt.value === 'medium' ? '•' : opt.value === 'in_progress' ? '⏳' : opt.value === 'weak' ? '!' : opt.value === 'forgot' ? '✕' : '—'}
-      </span>
+      />
     ),
     badgeStyle: 'bg-transparent border-none p-0',
   }));

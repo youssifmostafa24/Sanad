@@ -10,6 +10,7 @@ import {
   Eye,
   Info,
   Save,
+  Bookmark,
 } from 'lucide-react';
 import { Student } from '../types';
 import { QURAN_SURAHS, QuranSurah } from '../data/quranSurahs';
@@ -46,14 +47,13 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
   onSaveFocusNotes,
 }) => {
   const [focusNotes, setFocusNotes] = useState(student.memorizationFocus || '');
-  const [motivationalMessage, setMotivationalMessage] = useState(student.motivationalMessage || '');
   const [selectedSurahNum, setSelectedSurahNum] = useState(student.tilawaSurah || 18);
   const [selectedAyahNum, setSelectedAyahNum] = useState(student.tilawaAyah || 1);
   const [isSavedRecently, setIsSavedRecently] = useState(false);
+  const [isBookmarkedToast, setIsBookmarkedToast] = useState(false);
 
   useEffect(() => {
     setFocusNotes(student.memorizationFocus || '');
-    setMotivationalMessage(student.motivationalMessage || '');
     setSelectedSurahNum(student.tilawaSurah || 18);
     setSelectedAyahNum(student.tilawaAyah || 1);
   }, [student, isOpen]);
@@ -94,7 +94,13 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
   };
 
   const handleSave = () => {
-    onSaveFocusNotes(student.id, focusNotes, selectedSurahNum, selectedAyahNum, motivationalMessage);
+    onSaveFocusNotes(
+      student.id,
+      focusNotes,
+      selectedSurahNum,
+      selectedAyahNum,
+      student.motivationalMessage
+    );
     setIsSavedRecently(true);
     setTimeout(() => {
       setIsSavedRecently(false);
@@ -163,7 +169,7 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
                 </div>
                 <p className="text-[11px] text-[#B8860B] font-sans truncate flex items-center gap-1.5 mt-0.5">
                   <Target className="w-3.5 h-3.5" />
-                  <span>Memorization Focus & Current Recitation</span>
+                  <span>The Reading Surah & Memorization Focus</span>
                 </p>
               </div>
             </div>
@@ -204,15 +210,137 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
           {/* Modal Body */}
           <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
             {/* =========================================================================
-                Section 1: Memorization Focus Points & Notes
+                Section 1: Current reading position (Hero Card + Title Row with 44px Bookmark)
                ========================================================================= */}
-            <section id="section-memorization-focus" className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                  <Target className="w-4.5 h-4.5 text-[#B8860B]" />
-                  <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                    Memorization Focus Points & Notes
+            <section id="section-current-reading-position" className="space-y-2.5">
+              {/* Section Title Row directly above the hero card */}
+              <div className="flex items-center justify-between min-h-[44px]">
+                <div className="flex items-center gap-2 text-[#1F2A3D]">
+                  <BookOpen className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-[#8C6700] shrink-0" />
+                  <h3 className="text-sm sm:text-base font-bold text-[#1F2A3D] font-sans">
+                    Current reading position
                   </h3>
+                </div>
+
+                <div className="relative">
+                  {/* Bookmark Button: touch target min 44px */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBookmarkedToast(true);
+                      setTimeout(() => setIsBookmarkedToast(false), 2400);
+                    }}
+                    aria-label="Bookmark reading position"
+                    title={`Bookmark ${currentSurah.name} Ayah ${selectedAyahNum}`}
+                    className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-[#FAF6EE] hover:bg-[#F3EAD3] border border-[#B8860B]/30 flex items-center justify-center text-[#8C6700] hover:text-[#5E4500] hover:scale-105 active:scale-95 transition-all shadow-2xs cursor-pointer shrink-0"
+                  >
+                    <Bookmark className="w-5 h-5 fill-[#B8860B]/20 text-[#8C6700]" />
+                  </button>
+
+                  {/* Toast Confirmation */}
+                  {isBookmarkedToast && (
+                    <div className="absolute right-0 -top-8 px-2.5 py-1 bg-[#0E5C56] text-[#F1E7CE] text-[10px] font-bold rounded-lg shadow-md whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-150 z-20">
+                      Bookmarked! ✓
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* The Reading Hero Card */}
+              <div className="bg-white rounded-3xl border border-[#B8860B]/25 p-5 sm:p-7 shadow-xs space-y-4">
+                {/* Teacher Mode: Dropdown Selectors */}
+                {isTeacherMode && (
+                  <div className="flex items-center gap-2.5 w-full pb-3.5 border-b border-[#B8860B]/20">
+                    {/* Surah Dropdown */}
+                    <div className="flex-1 min-w-0">
+                      <label
+                        htmlFor="focus-tilawa-surah"
+                        className="block text-[10px] font-bold text-[#5B6478] mb-1"
+                      >
+                        Select Surah:
+                      </label>
+                      <select
+                        id="focus-tilawa-surah"
+                        value={selectedSurahNum}
+                        onChange={(e) => handleSurahChange(Number(e.target.value))}
+                        className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl py-2 px-2.5 text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/30 cursor-pointer shadow-2xs truncate"
+                      >
+                        {QURAN_SURAHS.map((s) => (
+                          <option key={`focus-s-${s.number}`} value={s.number}>
+                            {s.number}. {s.name} ({s.arabicName})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Ayah Dropdown */}
+                    <div className="w-28 sm:w-32 shrink-0">
+                      <label
+                        htmlFor="focus-tilawa-ayah"
+                        className="block text-[10px] font-bold text-[#5B6478] mb-1"
+                      >
+                        Ayah:
+                      </label>
+                      <select
+                        id="focus-tilawa-ayah"
+                        value={selectedAyahNum}
+                        onChange={(e) => setSelectedAyahNum(Number(e.target.value))}
+                        className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl py-2 px-1 text-center text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/30 cursor-pointer shadow-2xs"
+                      >
+                        {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
+                          <option key={`focus-a-${n}`} value={n}>
+                            Ayah {n}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hero Visual Card (matching uploaded design) */}
+                <div className="flex flex-col items-center justify-center text-center py-2 sm:py-3 space-y-1">
+                  {/* Large Calligraphic Arabic Name */}
+                  <h2 className="text-3xl sm:text-5xl font-serif font-extrabold text-[#0E5C56] tracking-tight leading-tight select-none">
+                    {currentSurah.arabicName}
+                  </h2>
+
+                  {/* English Surah Name */}
+                  <p className="text-xs sm:text-sm font-semibold text-[#5B6478]">
+                    {currentSurah.name}
+                  </p>
+
+                  {/* Ayah display: Ayah 40 / 110 */}
+                  <div className="flex items-baseline justify-center gap-1.5 pt-2">
+                    <span className="text-xs sm:text-sm font-medium text-[#5B6478]">Ayah</span>
+                    <span className="text-2xl sm:text-3xl font-black text-[#B8860B] tabular-nums font-mono">
+                      {selectedAyahNum}
+                    </span>
+                    <span className="text-xs sm:text-sm font-medium text-[#5B6478]">
+                      / {currentSurah.ayahCount}
+                    </span>
+                  </div>
+
+                  {/* Visual Progress Bar */}
+                  <div className="w-full max-w-sm sm:max-w-md h-2 bg-[#F3EAD3] rounded-full overflow-hidden mt-3">
+                    <div
+                      className="h-full bg-[#0E5C56] rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.max(3, (selectedAyahNum / currentSurah.ayahCount) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* =========================================================================
+                Section 2: Focus (Memorization Focus Points & Guidance)
+               ========================================================================= */}
+            <section id="section-memorization-focus" className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[#1F2A3D] font-bold text-sm sm:text-base">
+                  <Target className="w-4.5 h-4.5 text-[#8C6700]" />
+                  <span>Focus</span>
                 </div>
                 {isTeacherMode ? (
                   <span className="text-[10px] font-bold text-[#0E5C56] bg-[#0E5C56]/15 px-2.5 py-0.5 rounded-full">
@@ -266,19 +394,27 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
                   </div>
                 </div>
               ) : (
-                /* Student Mode: Read-Only View */
-                <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-4 shadow-2xs space-y-2.5">
+                /* Student Mode: Read-Only View matching screenshot with rounded sand cards */
+                <div className="space-y-2">
                   {focusNotes.trim() ? (
-                    <div className="bg-gradient-to-br from-[#FAF6EE] to-[#F3EAD3]/60 p-3.5 rounded-xl border border-[#B8860B]/30">
-                      <div className="flex items-start gap-2.5">
-                        <Sparkles className="w-4.5 h-4.5 text-[#B8860B] shrink-0 mt-0.5" />
-                        <div className="text-xs sm:text-sm text-[#1F2A3D] leading-relaxed whitespace-pre-line font-medium flex-1">
-                          {focusNotes}
-                        </div>
-                      </div>
-                    </div>
+                    focusNotes
+                      .split('\n')
+                      .map((l) => l.trim())
+                      .filter((l) => l.length > 0)
+                      .map((noteLine, idx) => {
+                        const cleanLine = noteLine.replace(/^[•\-\*]\s*/, '');
+                        return (
+                          <div
+                            key={`focus-note-${idx}`}
+                            className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#FAF6EE] border border-[#B8860B]/20 text-xs sm:text-sm text-[#1F2A3D] font-medium shadow-2xs"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-[#B8860B] shrink-0" />
+                            <span className="leading-snug">{cleanLine}</span>
+                          </div>
+                        );
+                      })
                   ) : (
-                    <div className="p-4 rounded-xl bg-[#FAF6EE]/60 border border-dashed border-[#B8860B]/30 text-center space-y-1">
+                    <div className="p-4 rounded-2xl bg-[#FAF6EE]/70 border border-dashed border-[#B8860B]/30 text-center space-y-1">
                       <Info className="w-5 h-5 mx-auto text-[#B8860B]" />
                       <p className="text-xs font-semibold text-[#0E5C56]">
                         No specific focus notes recorded at this time
@@ -290,153 +426,6 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
                   )}
                 </div>
               )}
-            </section>
-
-            {/* =========================================================================
-                Section 2: Current Recitation (Tilawa)
-               ========================================================================= */}
-            <section id="section-tilawa-surah-focus" className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                  <BookOpen className="w-4.5 h-4.5 text-[#B8860B]" />
-                  <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                    Current Recitation (Tilawa)
-                  </h3>
-                </div>
-                <span className="text-[10px] font-bold text-[#8A6305] bg-[#B8860B]/15 px-2.5 py-0.5 rounded-full">
-                  Bookmark
-                </span>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3">
-                {isTeacherMode ? (
-                  <>
-                    <div className="flex items-center gap-2 w-full">
-                      {/* Surah Dropdown */}
-                      <div className="flex-1 min-w-0">
-                        <label
-                          htmlFor="focus-tilawa-surah"
-                          className="block text-[10px] font-bold text-[#5B6478] mb-1"
-                        >
-                          Surah:
-                        </label>
-                        <select
-                          id="focus-tilawa-surah"
-                          value={selectedSurahNum}
-                          onChange={(e) => handleSurahChange(Number(e.target.value))}
-                          className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl py-2 px-2 text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/30 cursor-pointer shadow-2xs truncate"
-                        >
-                          {QURAN_SURAHS.map((s) => (
-                            <option key={`focus-s-${s.number}`} value={s.number}>
-                              {s.number}. {s.name} ({s.arabicName})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Ayah Dropdown */}
-                      <div className="w-28 sm:w-32 shrink-0">
-                        <label
-                          htmlFor="focus-tilawa-ayah"
-                          className="block text-[10px] font-bold text-[#5B6478] mb-1"
-                        >
-                          Ayah (of {currentSurah.ayahCount}):
-                        </label>
-                        <select
-                          id="focus-tilawa-ayah"
-                          value={selectedAyahNum}
-                          onChange={(e) => setSelectedAyahNum(Number(e.target.value))}
-                          className="w-full bg-[#FAF6EE] border border-[#B8860B]/35 rounded-xl py-2 px-1 text-center text-xs font-bold text-[#0E5C56] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/30 cursor-pointer shadow-2xs"
-                        >
-                          {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((n) => (
-                            <option key={`focus-a-${n}`} value={n}>
-                              Ayah {n}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Visual Badge Preview */}
-                    <div className="bg-[#FAF6EE] p-2.5 rounded-xl border border-[#B8860B]/20 flex items-center justify-between text-xs text-[#0E5C56]">
-                      <span className="font-medium text-[#5B6478]">Current bookmark:</span>
-                      <span className="font-bold text-[#0E5C56]">
-                        Surah {currentSurah.name} ({currentSurah.arabicName}) — Ayah {selectedAyahNum}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  /* Student View: Read-Only */
-                  <div className="bg-[#FAF6EE] p-3 rounded-xl border border-[#B8860B]/20 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#0E5C56] text-[#F1E7CE] flex items-center justify-center font-bold text-xs shadow-2xs">
-                        {currentSurah.number}
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-[#5B6478] block">Current Recitation:</span>
-                        <span className="text-sm font-bold text-[#0E5C56]">
-                          Surah {currentSurah.name} ({currentSurah.arabicName})
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-center bg-white px-3.5 py-1.5 rounded-xl border border-[#B8860B]/30 shadow-2xs">
-                      <span className="text-[10px] text-[#5B6478] block font-medium">Ayah</span>
-                      <span className="text-sm font-bold text-[#B8860B] font-mono">
-                        {selectedAyahNum} <span className="text-[#5B6478] text-xs font-normal">/ {currentSurah.ayahCount}</span>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* =========================================================================
-                Section 3: Weekly Stars Motivational Message (Custom Teacher Message)
-               ========================================================================= */}
-            <section id="section-weekly-motivational-message" className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                  <Sparkles className="w-4.5 h-4.5 text-[#F98326]" />
-                  <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                    Weekly Star Card & Motivational Message
-                  </h3>
-                </div>
-                <span className="text-[10px] font-bold text-[#EA580C] bg-[#F98326]/15 px-2.5 py-0.5 rounded-full">
-                  {isTeacherMode ? 'Editable' : 'Weekly Banner'}
-                </span>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#F98326]/30 p-3.5 sm:p-4 shadow-2xs space-y-3">
-                {isTeacherMode ? (
-                  <div>
-                    <label
-                      htmlFor="motivational-message-input"
-                      className="block text-xs font-semibold text-[#5B6478] mb-1.5"
-                    >
-                      Enter a custom encouraging message displayed on the student's weekly stars banner:
-                    </label>
-                    <input
-                      id="motivational-message-input"
-                      type="text"
-                      value={motivationalMessage}
-                      onChange={(e) => setMotivationalMessage(e.target.value)}
-                      placeholder="e.g. Log every day to unlock the 5th star / ممتاز يا بطل استمر في الحفظ!"
-                      className="w-full bg-[#FAF6EE]/80 border border-[#F98326]/40 rounded-xl p-3 text-xs sm:text-sm text-[#1F2A3D] placeholder-[#8A94A6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#F98326] transition-all font-sans"
-                    />
-                    <p className="text-[11px] text-[#5B6478] mt-1.5">
-                      This message appears directly on the orange weekly star banner (This week so far).
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gradient-to-r from-[#F98326] to-[#EE5D2A] text-white p-3.5 rounded-xl shadow-xs">
-                    <p className="text-xs font-bold text-white/85">Current Encouragement:</p>
-                    <p className="text-sm font-bold mt-1 text-white">
-                      {motivationalMessage.trim() || 'Log every day to unlock the 5th star'}
-                    </p>
-                  </div>
-                )}
-              </div>
             </section>
           </div>
 

@@ -90,9 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="sanad-main-header"
-      className={`fixed top-0 left-0 right-0 z-40 h-13 sm:h-14 bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] shadow-md transition-transform duration-300 ease-in-out flex flex-col justify-between ${
-        visible ? 'translate-y-0' : '-translate-y-full'
-      }`}
+      className="fixed top-0 left-0 right-0 z-40 h-13 sm:h-14 bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] shadow-md flex flex-col justify-between"
     >
       {/* Decorative top gold line */}
       <div className="h-0.5 bg-gradient-to-r from-transparent via-[#B8860B]/80 to-transparent w-full" />

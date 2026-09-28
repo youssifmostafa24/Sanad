@@ -7,6 +7,7 @@ import {
   getWeekBounds,
   addDays,
   getNextAttendanceDate,
+  generateHomeworkEntryId,
   getWeeklyStarRating,
   isCurrentStudyWeek,
   getWeeklyStarCardTitle,
@@ -27,6 +28,7 @@ import { VoiceHomeworkModal } from './components/VoiceHomeworkModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { isTeacherAuthenticatedStored, setTeacherAuthenticatedStored } from './utils/authUtils';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
+import { getDefaultMotivationalTitle } from './data/starBandPresets';
 import { BookOpen, ArrowDown, ChevronRight } from 'lucide-react';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
@@ -319,10 +321,12 @@ export default function App() {
     return data.families.find((f) => f.id === activeFamilyId) || data.families[0] || null;
   }, [data.families, activeFamilyId]);
 
-  // Students available in current view
+  // Students available in current view (ordered according to family definition)
   const visibleStudents = useMemo(() => {
     if (!activeFamily) return data.students;
-    const famStudents = data.students.filter((s) => activeFamily.studentIds.includes(s.id));
+    const famStudents = activeFamily.studentIds
+      .map((id) => data.students.find((s) => s.id === id))
+      .filter((s): s is Student => Boolean(s));
     return famStudents.length > 0 ? famStudents : data.students;
   }, [data.students, activeFamily]);
 
@@ -679,39 +683,32 @@ export default function App() {
     }, 50);
   };
 
-  // Scroll listener for header auto-hide/show
+  // Scroll listener - Header is permanently fixed and visible at all times
   const handleScroll = () => {
-    if (!scrollContainerRef.current) return;
-    const currentY = scrollContainerRef.current.scrollTop;
-    const prevY = lastScrollYRef.current;
-
-    if (currentY <= 40) {
-      setHeaderVisible(true);
-    } else if (currentY > prevY + 10) {
-      setHeaderVisible(false);
-    } else if (currentY < prevY - 8) {
-      setHeaderVisible(true);
-    }
-
-    lastScrollYRef.current = currentY;
+    // Header stays fixed and never hides on scroll
   };
 
   // Entry mutation handlers
   const handleUpdateEntry = (updated: Entry) => {
     if (!activeStudent) return;
+    const standardUpdated: Entry = {
+      ...updated,
+      id: generateHomeworkEntryId(activeStudent.id, updated.date),
+    };
+
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
         return {
           ...s,
-          entries: s.entries.map((e) => (e.id === updated.id ? updated : e)),
+          entries: s.entries.map((e) => (e.id === updated.id || e.date === updated.date ? standardUpdated : e)),
         };
       });
       return { ...prev, students: updatedStudents };
     });
 
     if (isSupabaseConfigured()) {
-      upsertEntryInSupabase(activeStudent.id, updated).catch((err) =>
+      upsertEntryInSupabase(activeStudent.id, standardUpdated).catch((err) =>
         console.error('Failed to sync updated entry to Supabase:', err)
       );
     }
@@ -746,7 +743,7 @@ export default function App() {
     const nextDate = getNextAttendanceDate(entry.date, attendanceSchedule);
 
     const newEntry: Entry = {
-      id: `entry-${Date.now()}`,
+      id: generateHomeworkEntryId(activeStudent.id, nextDate),
       date: nextDate,
       hifzText: entry.hifzText,
       hifzGrade: null, // Ungraded
@@ -797,7 +794,7 @@ export default function App() {
       : getNextAttendanceDate(todayStr, attendanceSchedule);
 
     const newEntry: Entry = {
-      id: `entry-${Date.now()}`,
+      id: generateHomeworkEntryId(activeStudent.id, targetDate),
       date: targetDate,
       hifzText: last ? last.hifzText : '',
       hifzGrade: null,
@@ -869,7 +866,7 @@ export default function App() {
     });
 
     if (isSupabaseConfigured()) {
-      updateStudentSurahRatingsInSupabase(activeStudent.id, updatedRatings).catch((err) =>
+      updateStudentSurahRatingsInSupabase(activeStudent.id, updatedRatings, surahNumber, status).catch((err) =>
         console.error('Failed to update surah status in Supabase:', err)
       );
     }
@@ -895,7 +892,7 @@ export default function App() {
     });
 
     if (isSupabaseConfigured()) {
-      updateStudentSurahRatingsInSupabase(studentId, updatedRatings).catch((err) =>
+      updateStudentSurahRatingsInSupabase(studentId, updatedRatings, surahNumber, status).catch((err) =>
         console.error('Failed to update modal surah status in Supabase:', err)
       );
     }
@@ -1127,7 +1124,7 @@ export default function App() {
     // 1. If hifz or revision is present, add new homework entry
     if (hifz || revision) {
       const newEntry: Entry = {
-        id: `entry-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: generateHomeworkEntryId(studentId, entryDate),
         date: entryDate,
         hifzText: hifz || '—',
         hifzGrade: grade ?? null,
@@ -1369,14 +1366,25 @@ export default function App() {
                       {shouldShowStarBand && weekRating !== null && (() => {
                         const now = new Date();
                         const isCurrent = isCurrentStudyWeek(weekEndThursday, now);
-                        const defaultWeekTitle = getWeeklyStarCardTitle(weekBounds, now);
 
                         const manualWeekConfig = activeStudent.manualWeeklyStars?.find(
                           (m) =>
                             m.weekEndDate === weekEndThursday ||
                             m.weekEndDate === addDays(weekEndThursday, 1)
                         );
-                        const displayWeekTitle = manualWeekConfig?.title || defaultWeekTitle;
+
+                        // Dynamically select a preset message from the matching star tier (Req 2)
+                        const defaultDynamicTitle = getDefaultMotivationalTitle(
+                          weekRating.stars,
+                          `${activeStudent.id}-${weekEndThursday}`
+                        );
+
+                        // Preserves custom title if teacher edited or set one (Req 4)
+                        const displayWeekTitle =
+                          manualWeekConfig?.title && manualWeekConfig.title.trim().length > 0
+                            ? manualWeekConfig.title
+                            : defaultDynamicTitle;
+
                         const displayWeekSubtitle = manualWeekConfig?.message || activeStudent.motivationalMessage;
 
                         return (

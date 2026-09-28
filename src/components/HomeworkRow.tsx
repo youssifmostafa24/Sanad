@@ -222,7 +222,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               >
                 {parsedHifz ? (
                   parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate">
+                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
                       <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                         {parsedHifz.surahName}
                       </span>
@@ -241,7 +241,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     </>
                   )
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -252,7 +252,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
                 {parsedHifz ? (
                   parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate">
+                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
                       <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                         {parsedHifz.surahName}
                       </span>
@@ -271,7 +271,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     </>
                   )
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -324,7 +324,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               >
                 {parsedMurajaa ? (
                   parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate">
+                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
                       <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                         {parsedMurajaa.surahName}
                       </span>
@@ -343,7 +343,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     </>
                   )
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -354,7 +354,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
               <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
                 {parsedMurajaa ? (
                   parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate">
+                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
                       <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
                         {parsedMurajaa.surahName}
                       </span>
@@ -373,7 +373,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                     </>
                   )
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
+                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (

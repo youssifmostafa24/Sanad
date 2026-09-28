@@ -12,25 +12,6 @@ interface SurahStatusDotProps {
   idPrefix?: string;
 }
 
-// Icon helper for colorblind accessibility
-function getStatusSymbol(status?: string | SurahMemorizationStatus): string {
-  switch (status) {
-    case 'strong':
-      return '✓';
-    case 'medium':
-      return '•';
-    case 'in_progress':
-      return '⏳';
-    case 'weak':
-      return '!';
-    case 'forgot':
-      return '✕';
-    case 'not_memorized':
-    default:
-      return '—';
-  }
-}
-
 export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
   surah,
   status = 'not_memorized',
@@ -44,7 +25,6 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const currentMeta = getSurahStatusMeta(status);
-  const symbol = getStatusSymbol(status);
 
   const updateCoordinates = (popoverHeight: number = 240) => {
     if (!buttonRef.current) return;
@@ -132,16 +112,14 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
         aria-expanded={isOpen}
       >
         <span
-          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-2xs transition-transform hover:scale-115 active:scale-95 ${
+          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center shadow-2xs transition-transform hover:scale-115 active:scale-95 ${
             isTeacherMode ? 'ring-1.5 ring-[#B8860B]/70 ring-offset-1' : ''
           }`}
           style={{ backgroundColor: currentMeta.bgColor }}
-        >
-          {symbol !== '—' && <span className="leading-none select-none">{symbol}</span>}
-        </span>
+        />
       </button>
 
-      {/* Simplified Status Popover (Requirements 7 & 8: No surah name, no verse count, no edit title — only status options list) */}
+      {/* Simplified Status Popover */}
       {isOpen && popoverCoords && createPortal(
         <div
           ref={popoverRef}
@@ -161,7 +139,6 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
           <div className="flex flex-col gap-1.5">
             {SURAH_STATUS_OPTIONS.map((opt) => {
               const isSelected = opt.value === status;
-              const optSymbol = getStatusSymbol(opt.value);
               return (
                 <button
                   key={opt.value}
@@ -173,18 +150,15 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
                     setIsOpen(false);
                   }}
                   style={{ backgroundColor: opt.bgColor }}
-                  className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-white text-xs font-bold transition-all active:scale-95 shadow-2xs hover:brightness-110 ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-white text-xs font-bold transition-all active:scale-95 shadow-2xs hover:brightness-110 ${
                     isSelected ? 'ring-2 ring-[#0E5C56] ring-offset-1' : 'opacity-95 hover:opacity-100'
                   } ${isTeacherMode ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    {optSymbol !== '—' && <span className="font-mono text-xs">{optSymbol}</span>}
-                    <span>{opt.shortLabel}</span>
-                  </div>
+                  <span className="font-sans font-bold">{opt.shortLabel}</span>
                   {isSelected ? (
-                    <Check className="w-3.5 h-3.5 text-white stroke-[3] shrink-0" />
+                    <Check className="w-4 h-4 text-white stroke-[3] shrink-0" />
                   ) : (
-                    <span className="w-3.5 h-3.5 shrink-0" />
+                    <span className="w-4 h-4 shrink-0" />
                   )}
                 </button>
               );

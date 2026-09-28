@@ -184,10 +184,58 @@ export const QURAN_SURAHS: QuranSurah[] = [
 ];
 
 /**
+ * Convert eastern Arabic numerals (١ ٢ ٣ ٤ ٥ ٦ ٧ ٨ ٩ ٠) and Persian numerals to Western standard numerals (1 2 3 4 5 6 7 8 9 0)
+ */
+export function convertEasternNumerals(str: string): string {
+  if (!str) return '';
+  const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const persianNumerals = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+
+  return str
+    .replace(/[٠-٩]/g, (w) => String(arabicNumerals.indexOf(w)))
+    .replace(/[۰-۹]/g, (w) => String(persianNumerals.indexOf(w)));
+}
+
+/**
+ * Normalizes Arabic text for flexible matching:
+ * - strips tashkeel (harakat)
+ * - normalizes alef variants (أ, إ, آ -> ا)
+ * - normalizes taa marbuta / haa (ة -> ه)
+ * - normalizes alif maqsura (ى -> ي)
+ * - strips "سورة" / "سوره" prefix
+ */
+export function normalizeArabicName(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/[\u064B-\u065F\u0670\u200E\u200F]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/^(سورة\s*|سوره\s*)/, '')
+    .replace(/[()]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Finds a Quran Surah by number, arabicName, or english name with flexible Arabic normalization
+ */
+export function findSurah(nameOrNum: string | number): QuranSurah | undefined {
+  if (typeof nameOrNum === 'number') {
+    return QURAN_SURAHS.find((s) => s.number === nameOrNum);
+  }
+  const clean = normalizeArabicName(nameOrNum);
+  return QURAN_SURAHS.find((s) => {
+    const sNorm = normalizeArabicName(s.arabicName);
+    return sNorm === clean || s.name.toLowerCase() === clean;
+  });
+}
+
+/**
  * Format homework text according to the required specification:
  * e.g., مريم 35–1
  * When fromAyah is 1 and toAyah reaches the end of the Surah, it writes "كاملة":
- * e.g., مريم كاملة
+ * Natural Arabic reading order: [Surah Name] [كاملة] (e.g., الواقعة كاملة)
  * Parentheses are removed to save horizontal space while keeping the dash between numbers.
  */
 export function formatQuranHomework(
@@ -198,32 +246,25 @@ export function formatQuranHomework(
 ): string {
   // Find surah total ayahs if not provided
   let total = surahTotalAyahs;
-  if (!total) {
-    const rawClean = surahArabicName.replace(/^(سورة\s*)/, '').replace(/[()]/g, '').trim().toLowerCase();
-    const found = QURAN_SURAHS.find(
-      (s) =>
-        s.arabicName === surahArabicName ||
-        s.arabicName.replace(/^(سورة\s*)/, '') === surahArabicName ||
-        s.arabicName.toLowerCase() === rawClean ||
-        s.name.toLowerCase() === rawClean
-    );
-    if (found) {
-      total = found.ayahCount;
-    }
+  let cleanSurah = surahArabicName.replace(/[\u200E\u200F]/g, '').replace(/^(سورة\s*|سوره\s*)/, '').replace(/[()]/g, '').trim();
+
+  const found = findSurah(surahArabicName);
+  if (found) {
+    cleanSurah = found.arabicName;
+    total = found.ayahCount;
   }
 
-  const cleanSurah = surahArabicName.replace(/[\u200E\u200F]/g, '').replace(/[()]/g, '').trim();
+  const minAyah = Math.min(fromAyah, toAyah);
+  const maxAyah = Math.max(fromAyah, toAyah);
 
-  // When fromAyah is 1 and toAyah is the end of the Surah: write "كاملة"
-  if (fromAyah === 1 && total && toAyah >= total) {
+  // When fromAyah is 1 and toAyah is the end of the Surah: always write "[Surah] كاملة"
+  if (minAyah === 1 && total && maxAyah >= total) {
     return `${cleanSurah} كاملة`;
   }
 
-  if (fromAyah === toAyah) {
-    return `${cleanSurah} ${fromAyah}`;
+  if (minAyah === maxAyah) {
+    return `${cleanSurah} ${minAyah}`;
   }
-  const minAyah = Math.min(fromAyah, toAyah);
-  const maxAyah = Math.max(fromAyah, toAyah);
   return `${cleanSurah} ${maxAyah}–${minAyah}`;
 }
 
@@ -238,29 +279,16 @@ export function parseQuranHomework(text: string): {
   toAyah: number;
 } | null {
   if (!text) return null;
-  const clean = text.replace(/[\u200E\u200F]/g, '').trim();
+  const clean = convertEasternNumerals(text).replace(/[\u200E\u200F]/g, '').trim();
 
   // 1. Check for كاملة / كامله or end-1 or 1-end or end ⬅ 1 format
-  let rawName: string | null = null;
-  const prefixMatch = clean.match(/^\(?\s*(?:[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١]|كامل[ةه]|full(?:\s*surah)?)\s*\)?\s*(.+)$/i);
-  if (prefixMatch) {
-    rawName = prefixMatch[1].replace(/[()]/g, '').trim();
-  } else {
-    const endMatch = clean.match(/^(.+?)(?:\s*\(?\s*|\s+)(?:[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١]|كامل[ةه]|full(?:\s*surah)?)\s*\)?$/i);
-    if (endMatch) {
-      rawName = endMatch[1].replace(/[()]/g, '').trim();
-    }
-  }
-
-  if (rawName) {
-    const rawNameClean = rawName.replace(/^(سورة\s*)/, '').replace(/[()]/g, '').trim().toLowerCase();
-    const found = QURAN_SURAHS.find(
-      (s) =>
-        s.arabicName === rawName ||
-        s.arabicName.replace(/^(سورة\s*)/, '') === rawNameClean ||
-        s.arabicName.toLowerCase() === rawNameClean ||
-        s.name.toLowerCase() === rawNameClean
-    );
+  const isFullSurahPattern = /(?:^|\s|\()(?:كامل[ةه]|full(?:\s*surah)?|[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١])(?:\s*|\)|$)/i;
+  if (isFullSurahPattern.test(clean)) {
+    const rawName = clean
+      .replace(/(?:^|\s|\()(?:كامل[ةه]|full(?:\s*surah)?|[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١])(?:\s*|\)|$)/gi, ' ')
+      .replace(/[()]/g, ' ')
+      .trim();
+    const found = findSurah(rawName);
     if (found) {
       return {
         surahNumber: found.number,
@@ -271,38 +299,29 @@ export function parseQuranHomework(text: string): {
   }
 
   // 2. Numeric format: matches both with and without parentheses, Surah first or range first
-  // Examples: "مريم 98–60", "مريم 98 ⬅ 60", "( 98-60 ) مريم", "98-60 مريم", "مريم 35", "مريم ( 35 )"
+  // Examples: "مريم 98–60", "مريم 98 ⬅ 60", "( 98-60 ) مريم", "98-60 مريم", "مريم 35", "الكهف من 1 إلى 20"
   let numRawName = '';
   let raw1 = 1;
   let raw2 = 1;
 
   // Case A: Surah first, then range/ayah
-  const matchA = clean.match(/^([^\d()]+?)\s*(?:\(\s*)?(\d+)(?:\s*[-–—⬅←]\s*(\d+))?(?:\s*\))?$/);
+  const matchA = clean.match(/^([^\d()]+?)\s*(?:(?:من\s+)?(\d+)\s*(?:[-–—⬅←]|الى|إلى|الي|لـ|ل|حتى|حتي)\s*(\d+)|(?:\(\s*)?(\d+)(?:\s*\))?)(?:\s*\))?$/i);
   // Case B: Range/ayah first, then Surah
-  const matchB = clean.match(/^(?:\(\s*)?(\d+)(?:\s*[-–—⬅←]\s*(\d+))?(?:\s*\))?\s*([^\d()]+)$/);
+  const matchB = clean.match(/^(?:(?:\(\s*)?(?:من\s+)?(\d+)\s*(?:[-–—⬅←]|الى|إلى|الي|لـ|ل|حتى|حتي)\s*(\d+)|\(?\s*(\d+)\s*\)?)\s*([^\d()]+)$/i);
 
   if (matchA) {
     numRawName = matchA[1].replace(/[()]/g, '').trim();
-    raw1 = parseInt(matchA[2], 10) || 1;
+    raw1 = matchA[2] ? parseInt(matchA[2], 10) : parseInt(matchA[4], 10);
     raw2 = matchA[3] ? parseInt(matchA[3], 10) : raw1;
   } else if (matchB) {
-    numRawName = matchB[3].replace(/[()]/g, '').trim();
-    raw1 = parseInt(matchB[1], 10) || 1;
+    numRawName = matchB[4].replace(/[()]/g, '').trim();
+    raw1 = matchB[1] ? parseInt(matchB[1], 10) : parseInt(matchB[3], 10);
     raw2 = matchB[2] ? parseInt(matchB[2], 10) : raw1;
   } else {
     return null;
   }
 
-  const rawNameClean = numRawName.replace(/^(سورة\s*)/, '').trim().toLowerCase();
-
-  const found = QURAN_SURAHS.find(
-    (s) =>
-      s.arabicName === numRawName ||
-      s.arabicName.replace(/^(سورة\s*)/, '') === numRawName ||
-      s.arabicName.toLowerCase() === rawNameClean ||
-      s.name.toLowerCase() === rawNameClean
-  );
-
+  const found = findSurah(numRawName);
   if (!found) return null;
 
   const from = Math.min(raw1, raw2);
@@ -319,27 +338,38 @@ export function parseQuranHomework(text: string): {
  * Normalizes any homework text so that:
  * - Parentheses are removed to save horizontal space
  * - A dash is preserved between numbers
- * - Full-surah homework (from 1 to last ayah) displays "كاملة" (e.g. الكهف كاملة)
+ * - Full-surah homework displays correctly in natural Arabic reading order as "[Surah] كاملة" (e.g. الواقعة كاملة)
+ * - Converts any Eastern Arabic digits to standard digits
  * - Swaps smaller and larger number so larger number is displayed in place of the smaller number.
  */
 export function normalizeQuranHomeworkText(text: string): string {
   if (!text || typeof text !== 'string') return text;
-  const clean = text.replace(/[\u200E\u200F]/g, '').trim();
+  const clean = convertEasternNumerals(text).replace(/[\u200E\u200F]/g, '').trim();
   const parsed = parseQuranHomework(clean);
   if (!parsed) {
-    // If not directly parsed as a Quran surah, strip parentheses surrounding numbers
-    return clean.replace(/\(\s*([0-9١-٩endENDكاملة]+(?:\s*[-–]\s*[0-9١-٩endENDكاملة]+)?)\s*\)/g, '$1').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+    // If not directly parsed as a Quran surah, check if it contains a surah name + كاملة
+    const isFull = /(?:^|\s|\()(?:كامل[ةه]|full(?:\s*surah)?|[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١])(?:\s*|\)|$)/i;
+    if (isFull.test(clean)) {
+      const stripped = clean.replace(/(?:^|\s|\()(?:كامل[ةه]|full(?:\s*surah)?|[1١]\s*[-–—⬅←]\s*end|end\s*[-–—⬅←]\s*[1١])(?:\s*|\)|$)/gi, ' ').trim();
+      const s = findSurah(stripped);
+      if (s) {
+        return `${s.arabicName} كاملة`;
+      }
+    }
+    // Strip parentheses surrounding numbers
+    return clean.replace(/\(\s*([0-9endENDكاملة]+(?:\s*[-–]\s*[0-9endENDكاملة]+)?)\s*\)/g, '$1').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
   }
 
   const surah = QURAN_SURAHS.find((s) => s.number === parsed.surahNumber);
   if (!surah) return clean.replace(/[()]/g, '').trim();
 
-  if (parsed.fromAyah === 1 && parsed.toAyah >= surah.ayahCount) {
+  const minAyah = Math.min(parsed.fromAyah, parsed.toAyah);
+  const maxAyah = Math.max(parsed.fromAyah, parsed.toAyah);
+
+  if (minAyah === 1 && maxAyah >= surah.ayahCount) {
     return `${surah.arabicName} كاملة`;
   }
 
-  const minAyah = Math.min(parsed.fromAyah, parsed.toAyah);
-  const maxAyah = Math.max(parsed.fromAyah, parsed.toAyah);
   if (minAyah === maxAyah) {
     return `${surah.arabicName} ${minAyah}`;
   }
@@ -360,7 +390,7 @@ export interface ParsedHomeworkDisplay {
  */
 export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null {
   if (!text || typeof text !== 'string') return null;
-  const clean = text.replace(/[\u200E\u200F]/g, '').trim();
+  const clean = convertEasternNumerals(text).replace(/[\u200E\u200F]/g, '').trim();
   if (!clean) return null;
 
   // First check if parseQuranHomework identifies this as a valid surah assignment
@@ -368,22 +398,22 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
   if (parsed) {
     const surah = QURAN_SURAHS.find((s) => s.number === parsed.surahNumber);
     if (surah) {
-      if (parsed.fromAyah === 1 && parsed.toAyah >= surah.ayahCount) {
+      const min = Math.min(parsed.fromAyah, parsed.toAyah);
+      const max = Math.max(parsed.fromAyah, parsed.toAyah);
+      if (min === 1 && max >= surah.ayahCount) {
         return {
           surahName: surah.arabicName,
           ayahRange: 'كاملة',
           isFullSurah: true,
         };
       }
-      if (parsed.fromAyah === parsed.toAyah) {
+      if (min === max) {
         return {
           surahName: surah.arabicName,
-          ayahRange: `${parsed.fromAyah}`,
+          ayahRange: `${min}`,
           isFullSurah: false,
         };
       }
-      const min = Math.min(parsed.fromAyah, parsed.toAyah);
-      const max = Math.max(parsed.fromAyah, parsed.toAyah);
       return {
         surahName: surah.arabicName,
         ayahRange: `${max}–${min}`,
@@ -394,7 +424,7 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
 
   // Helper to reorder numeric range: swap small and big numbers, strictly without parentheses
   const formatRangePart = (rawPart: string): string => {
-    let p = rawPart.replace(/[()]/g, '').trim();
+    let p = convertEasternNumerals(rawPart).replace(/[()]/g, '').trim();
     if (
       /^[1١]\s*[-–—⬅←]\s*end$/i.test(p) ||
       /^end\s*[-–—⬅←]\s*[1١]$/i.test(p) ||
@@ -403,7 +433,7 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
     ) {
       return 'كاملة';
     }
-    const numMatch = p.match(/^([0-9]+)\s*[-–—⬅←]\s*([0-9]+)$/);
+    const numMatch = p.match(/^([0-9]+)\s*(?:[-–—⬅←]|الى|إلى|الي|لـ|ل|حتى|حتي)\s*([0-9]+)$/);
     if (numMatch) {
       const n1 = parseInt(numMatch[1], 10);
       const n2 = parseInt(numMatch[2], 10);
@@ -422,8 +452,9 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
     const part1 = m1[1].replace(/[()]/g, '').trim();
     let part2 = m1[2].trim();
     const formatted = formatRangePart(part2);
+    const surah = findSurah(part1);
     return {
-      surahName: part1,
+      surahName: surah ? surah.arabicName : part1,
       ayahRange: formatted,
       isFullSurah: formatted === 'كاملة',
     };
@@ -435,39 +466,42 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
     let part1 = m2[1].trim();
     const part2 = m2[2].replace(/[()]/g, '').trim();
     const formatted = formatRangePart(part1);
+    const surah = findSurah(part2);
     return {
-      surahName: part2,
+      surahName: surah ? surah.arabicName : part2,
       ayahRange: formatted,
       isFullSurah: formatted === 'كاملة',
     };
   }
 
   // Case 3: Surah followed by numbers / keywords without parentheses e.g. "الكهف 10–1", "الكهف كاملة"
-  const m3 = clean.match(/^([^\d()]+?)\s+([0-9١-٩]+(?:\s*[-–—⬅←]\s*(?:[0-9١-٩]+|end))?|end(?:[-–—⬅←][0-9١-٩]+)?|كامل[ةه]|full(?:\s*surah)?)$/i);
+  const m3 = clean.match(/^([^\d()]+?)\s+([0-9]+(?:\s*[-–—⬅←]\s*(?:[0-9]+|end))?|end(?:[-–—⬅←][0-9]+)?|كامل[ةه]|full(?:\s*surah)?)$/i);
   if (m3) {
     const part1 = m3[1].replace(/[()]/g, '').trim();
     const part2 = formatRangePart(m3[2].trim());
+    const surah = findSurah(part1);
     return {
-      surahName: part1,
+      surahName: surah ? surah.arabicName : part1,
       ayahRange: part2,
       isFullSurah: part2 === 'كاملة',
     };
   }
 
   // Case 4: Numbers / keywords followed by Surah without parentheses e.g. "10–1 الكهف", "كاملة الكهف"
-  const m4 = clean.match(/^([0-9١-٩]+(?:\s*[-–—⬅←]\s*(?:[0-9١-٩]+|end))?|end(?:[-–—⬅←][0-9١-٩]+)?|كامل[ةه]|full(?:\s*surah)?)\s+([^\d()]+)$/i);
+  const m4 = clean.match(/^([0-9]+(?:\s*[-–—⬅←]\s*(?:[0-9]+|end))?|end(?:[-–—⬅←][0-9]+)?|كامل[ةه]|full(?:\s*surah)?)\s+([^\d()]+)$/i);
   if (m4) {
     const part1 = formatRangePart(m4[1].trim());
     const part2 = m4[2].replace(/[()]/g, '').trim();
+    const surah = findSurah(part2);
     return {
-      surahName: part2,
+      surahName: surah ? surah.arabicName : part2,
       ayahRange: part1,
       isFullSurah: part1 === 'كاملة',
     };
   }
 
   // Case 5: Standalone number range or كاملة without surah e.g. "51-110", "كاملة"
-  const m5 = clean.match(/^([0-9١-٩]+(?:\s*[-–—⬅←]\s*(?:[0-9١-٩]+|end))?|end(?:[-–—⬅←][0-9١-٩]+)?|كامل[ةه])$/i);
+  const m5 = clean.match(/^([0-9]+(?:\s*[-–—⬅←]\s*(?:[0-9]+|end))?|end(?:[-–—⬅←][0-9]+)?|كامل[ةه])$/i);
   if (m5) {
     const formatted = formatRangePart(m5[1].trim());
     return {
@@ -498,22 +532,11 @@ export function getSurahFromHomework(text: string): QuranSurah | undefined {
 
   // 2. Try parsing display parts (e.g. { surahName, ayahRange })
   const parsedDisplay = parseHomeworkDisplay(clean);
-  const nameToMatch = (parsedDisplay?.surahName || clean).replace(/[()]/g, '').trim();
+  if (parsedDisplay?.surahName) {
+    const found = findSurah(parsedDisplay.surahName);
+    if (found) return found;
+  }
 
-  // 3. Match against QURAN_SURAHS (longest name first)
-  const cleanName = nameToMatch.replace(/^(سورة\s*)/, '').trim().toLowerCase();
-  const sorted = [...QURAN_SURAHS].sort((a, b) => b.arabicName.length - a.arabicName.length);
-
-  return sorted.find((s) => {
-    const sAr = s.arabicName.replace(/^(سورة\s*)/, '').trim().toLowerCase();
-    const sEn = s.name.toLowerCase();
-    return (
-      s.arabicName === nameToMatch ||
-      sAr === cleanName ||
-      nameToMatch.includes(s.arabicName) ||
-      cleanName.includes(sAr) ||
-      clean.includes(s.arabicName) ||
-      sEn === cleanName
-    );
-  });
+  // 3. Fallback matching with findSurah
+  return findSurah(clean);
 }

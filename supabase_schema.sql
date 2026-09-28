@@ -94,9 +94,41 @@ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.homework_entries;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'student_surah_tracker'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.student_surah_tracker;
+  END IF;
 END $$;
 
--- 8. Initial Seed Data (Families & Students)
+-- 8. Surah Memorization Tracker Table (Per student and per surah)
+CREATE TABLE IF NOT EXISTS public.student_surah_tracker (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id TEXT NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    surah_number INTEGER NOT NULL CHECK (surah_number BETWEEN 1 AND 114),
+    surah_name TEXT,
+    status TEXT NOT NULL CHECK (status IN ('not_memorized', 'in_progress', 'strong', 'medium', 'weak', 'forgot')),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    
+    UNIQUE (student_id, surah_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_surah_tracker_student_id ON public.student_surah_tracker(student_id);
+CREATE INDEX IF NOT EXISTS idx_surah_tracker_status ON public.student_surah_tracker(status);
+
+ALTER TABLE public.student_surah_tracker ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read on student_surah_tracker" ON public.student_surah_tracker;
+CREATE POLICY "Allow public read on student_surah_tracker" 
+ON public.student_surah_tracker FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert/update/delete on student_surah_tracker" ON public.student_surah_tracker;
+CREATE POLICY "Allow public insert/update/delete on student_surah_tracker" 
+ON public.student_surah_tracker FOR ALL USING (true) WITH CHECK (true);
+
+-- 9. Initial Seed Data (Families & Students)
 INSERT INTO public.families (id, name, student_ids, attendance_days) VALUES
 ('family-1', 'Sulaymn + Ibrahim + Ali', '["student-sulayman", "student-ibrahim", "student-ali"]'::jsonb, '[1, 5]'::jsonb),
 ('family-2', 'Musab + umair + Uthman', '["student-musab", "student-umair", "student-uthman"]'::jsonb, '[1, 5]'::jsonb),

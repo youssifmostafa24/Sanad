@@ -187,27 +187,31 @@ export function isWeekRatingVisible(weekEndDateStr: string, now: Date = new Date
 }
 
 /**
- * Calculates star rating from grade percentage:
- * - 0%  -> 1.0 star
- * - 10% -> 1.5 stars
- * - 20% -> 2.0 stars
- * - 30% -> 2.5 stars
- * - 40% -> 3.0 stars
- * - 50% -> 3.5 stars
- * - 60% -> 4.0 stars
- * - 70% -> 4.5 stars
- * - 80%, 90%, 100% -> 5.0 stars
+ * Calculates star rating naturally from grade percentage:
+ * - Each half star (0.5 star) represents 10% (النصف نجمة بعشرة في المئة):
+ * - 0%   -> 0 stars
+ * - 10%  -> 0.5 stars
+ * - 20%  -> 1.0 star
+ * - 30%  -> 1.5 stars
+ * - 40%  -> 2.0 stars
+ * - 50%  -> 2.5 stars
+ * - 60%  -> 3.0 stars
+ * - 70%  -> 3.5 stars
+ * - 80%  -> 4.0 stars
+ * - 90%  -> 4.5 stars
+ * - 100% -> 5.0 stars
  */
 export function calculateStarsFromPercentage(percentage: number): number {
-  if (percentage >= 80) {
+  if (percentage <= 0) {
+    return 0;
+  }
+  if (percentage >= 100) {
     return 5;
   }
-  if (percentage <= 0) {
-    return 1;
-  }
-  const step = Math.round(percentage / 10);
-  const stars = 1 + step * 0.5;
-  return Math.max(1, Math.min(5, stars));
+  // Each 10% is 0.5 stars: (percentage / 10) * 0.5 = percentage / 20
+  // Round to nearest half-star (steps of 0.5)
+  const stars = Math.round(percentage / 10) * 0.5;
+  return Math.max(0, Math.min(5, stars));
 }
 
 /**
@@ -260,8 +264,8 @@ export function getWeeklyStarRating(
     return null;
   }
 
-  // Requirement 4: newly created star rating cards default to Manual mode instead of Automatic!
-  return { stars: Math.max(0, Math.min(5, autoStars)), isManual: true, autoStars };
+  // Automatic natural evaluation by default
+  return { stars: Math.max(0, Math.min(5, autoStars)), isManual: false, autoStars };
 }
 
 /**
@@ -299,5 +303,19 @@ export function getNextAttendanceDate(
   }
 
   return addDays(lastDateStr, 1);
+}
+
+/**
+ * Generates standard unique homework entry ID based on student ID and date.
+ * Format: entry-<student-slug>-<YYYY-MM-DD>
+ * Example: entry-sulayman-2026-07-28
+ */
+export function generateHomeworkEntryId(studentId: string, dateStr: string): string {
+  const slug = (studentId || '')
+    .toLowerCase()
+    .trim()
+    .replace(/^student-/, '')
+    .replace(/[^a-z0-9_-]/g, '') || 'student';
+  return `entry-${slug}-${dateStr.trim()}`;
 }
 

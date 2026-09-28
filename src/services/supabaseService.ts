@@ -1,7 +1,7 @@
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
 import { Family, Student, Entry, SurahMemorizationStatus, ManualWeeklyStars, GradeValue } from '../types';
 import { getInitialData } from '../data/seedData';
-import { normalizeQuranHomeworkText } from '../data/quranSurahs';
+import { normalizeQuranHomeworkText, QURAN_SURAHS } from '../data/quranSurahs';
 
 export interface SupabaseHomeworkRow {
   id: string;
@@ -13,6 +13,15 @@ export interface SupabaseHomeworkRow {
   murajaa_grade: number | null;
   on_time_score?: number | null;
   created_at?: string;
+}
+
+export interface SupabaseStudentSurahTrackerRow {
+  id?: string;
+  student_id: string;
+  surah_number: number;
+  surah_name?: string | null;
+  status: SurahMemorizationStatus;
+  updated_at?: string;
 }
 
 export interface SupabaseStudentRow {
@@ -128,6 +137,29 @@ export async function fetchAllDataFromSupabase(): Promise<{
       });
     });
 
+    // 4. Fetch Surah tracker records from student_surah_tracker table (if present)
+    const surahTrackerByStudent: Record<string, Record<number, SurahMemorizationStatus>> = {};
+    try {
+      const { data: trackerRows, error: trackerErr } = await client
+        .from('student_surah_tracker')
+        .select('*');
+
+      if (!trackerErr && trackerRows && trackerRows.length > 0) {
+        trackerRows.forEach((row: any) => {
+          const stId = row.student_id;
+          if (!surahTrackerByStudent[stId]) {
+            surahTrackerByStudent[stId] = {};
+          }
+          if (row.surah_number && row.status) {
+            surahTrackerByStudent[stId][row.surah_number] = row.status as SurahMemorizationStatus;
+          }
+        });
+      }
+    } catch (e) {
+      // Table may not exist yet or not yet migrated
+      console.warn('Note: student_surah_tracker query notice:', e);
+    }
+
     // Helper to find matching entries for a student whether student_id matches exact ID or student name/slug
     const getEntriesForStudent = (stId: string, stName: string, stArabicName?: string | null): Entry[] => {
       let rawEntries: Entry[] = [];
@@ -195,7 +227,10 @@ export async function fetchAllDataFromSupabase(): Promise<{
         tilawaAyah: stRow.tilawa_ayah || 1,
         memorizationFocus: (stRow as any).memorization_focus || (stRow as any).focus_notes || undefined,
         motivationalMessage: (stRow as any).motivational_message || undefined,
-        surahRatings: stRow.surah_ratings || {},
+        surahRatings: {
+          ...(stRow.surah_ratings || {}),
+          ...(surahTrackerByStudent[stRow.id] || {}),
+        },
         manualWeeklyStars: Array.isArray(stRow.manual_weekly_stars) ? stRow.manual_weekly_stars : [],
         entries: studentEntries,
       };
@@ -379,8 +414,9 @@ export async function syncAllLocalDataToSupabase(data: {
     const entriesToInsert: SupabaseHomeworkRow[] = [];
     data.students.forEach((s) => {
       (s.entries || []).forEach((e) => {
+        const standardId = `entry-${s.id.toLowerCase().replace(/^student-/, '')}-${e.date.trim()}`;
         entriesToInsert.push({
-          id: e.id,
+          id: standardId,
           student_id: s.id,
           date: e.date,
           hifz_text: e.hifzText,
@@ -443,8 +479,11 @@ export async function upsertEntryInSupabase(studentId: string, entry: Entry): Pr
   if (!client) return false;
 
   try {
+    const studentSlug = studentId.toLowerCase().trim().replace(/^student-/, '');
+    const standardId = `entry-${studentSlug}-${entry.date.trim()}`;
+
     const payload: SupabaseHomeworkRow = {
-      id: entry.id,
+      id: standardId,
       student_id: studentId,
       date: entry.date,
       hifz_text: entry.hifzText,
@@ -506,25 +545,76 @@ export async function deleteEntryInSupabase(entryId: string): Promise<boolean> {
 }
 
 /**
- * Update a student's Surah memorization ratings
+ * Update a student's Surah memorization ratings in Supabase
+ * Synchronizes with both students.surah_ratings and public.student_surah_tracker
  */
 export async function updateStudentSurahRatingsInSupabase(
   studentId: string,
-  surahRatings: Record<number, SurahMemorizationStatus>
+  surahRatings: Record<number, SurahMemorizationStatus>,
+  updatedSurahNumber?: number,
+  updatedStatus?: SurahMemorizationStatus
 ): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
 
   try {
-    const { error } = await client
+    // 1. Update in students table (JSONB column)
+    const { error: studentUpdateError } = await client
       .from('students')
       .update({ surah_ratings: surahRatings })
       .eq('id', studentId);
 
-    if (error) {
-      console.error('Supabase update surah ratings error:', error.message);
-      return false;
+    if (studentUpdateError) {
+      console.warn('Supabase update surah ratings error in students table:', studentUpdateError.message);
     }
+
+    // 2. Upsert into dedicated student_surah_tracker table
+    try {
+      if (typeof updatedSurahNumber === 'number' && updatedStatus) {
+        const surahInfo = QURAN_SURAHS.find((s) => s.number === updatedSurahNumber);
+        const { error: trackerSingleError } = await client
+          .from('student_surah_tracker')
+          .upsert(
+            {
+              student_id: studentId,
+              surah_number: updatedSurahNumber,
+              surah_name: surahInfo?.name || `Surah ${updatedSurahNumber}`,
+              status: updatedStatus,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'student_id,surah_number' }
+          );
+
+        if (trackerSingleError) {
+          console.warn('Supabase student_surah_tracker single upsert notice:', trackerSingleError.message);
+        }
+      } else {
+        const trackerRows = Object.entries(surahRatings).map(([surahNumStr, status]) => {
+          const num = parseInt(surahNumStr, 10);
+          const surahInfo = QURAN_SURAHS.find((s) => s.number === num);
+          return {
+            student_id: studentId,
+            surah_number: num,
+            surah_name: surahInfo?.name || `Surah ${num}`,
+            status,
+            updated_at: new Date().toISOString(),
+          };
+        });
+
+        if (trackerRows.length > 0) {
+          const { error: trackerBatchError } = await client
+            .from('student_surah_tracker')
+            .upsert(trackerRows, { onConflict: 'student_id,surah_number' });
+
+          if (trackerBatchError) {
+            console.warn('Supabase student_surah_tracker batch upsert notice:', trackerBatchError.message);
+          }
+        }
+      }
+    } catch (trackerErr) {
+      console.warn('Note: student_surah_tracker sync notice:', trackerErr);
+    }
+
     return true;
   } catch (err) {
     console.error('Error updating surah ratings in Supabase:', err);
@@ -726,6 +816,11 @@ export function subscribeToSupabaseChanges(onDataChange: () => void): () => void
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'families' },
+        () => onDataChange()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'student_surah_tracker' },
         () => onDataChange()
       )
       .subscribe();
