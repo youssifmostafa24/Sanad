@@ -44,6 +44,7 @@ export interface SupabaseFamilyRow {
   name: string;
   student_ids: string[];
   attendance_days?: number[] | null;
+  parent_password_hash?: string | null;
   created_at?: string;
 }
 
@@ -81,11 +82,9 @@ export async function fetchAllDataFromSupabase(): Promise<{
       return null;
     }
 
-    // If tables are completely empty, seed them automatically
+    // If tables are empty in database, return empty data (do not auto-seed mock data)
     if ((!familiesData || familiesData.length === 0) && (!studentsData || studentsData.length === 0)) {
-      console.log('Supabase tables are empty. Seeding initial data...');
-      await seedInitialDataToSupabase();
-      return fetchAllDataFromSupabase();
+      return { families: [], students: [] };
     }
 
     // 3. Fetch all entries (handle pagination in chunks of 1000 to ensure all historical entries are fetched)
@@ -160,6 +159,32 @@ export async function fetchAllDataFromSupabase(): Promise<{
       console.warn('Note: student_surah_tracker query notice:', e);
     }
 
+    // 5. Fetch Weekly Stars and Motivational Messages from student_weekly_stars table (if present)
+    const weeklyStarsByStudent: Record<string, ManualWeeklyStars[]> = {};
+    try {
+      const { data: starRows, error: starErr } = await client
+        .from('student_weekly_stars')
+        .select('*');
+
+      if (!starErr && starRows && starRows.length > 0) {
+        starRows.forEach((row: any) => {
+          const stId = row.student_id;
+          if (!weeklyStarsByStudent[stId]) {
+            weeklyStarsByStudent[stId] = [];
+          }
+          weeklyStarsByStudent[stId].push({
+            weekEndDate: row.week_end_date,
+            stars: typeof row.stars === 'number' ? row.stars : parseFloat(row.stars) || 5,
+            disabledAuto: Boolean(row.disabled_auto),
+            title: row.title || undefined,
+            message: row.message || undefined,
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Note: student_weekly_stars query notice:', e);
+    }
+
     // Helper to find matching entries for a student whether student_id matches exact ID or student name/slug
     const getEntriesForStudent = (stId: string, stName: string, stArabicName?: string | null): Entry[] => {
       let rawEntries: Entry[] = [];
@@ -231,7 +256,14 @@ export async function fetchAllDataFromSupabase(): Promise<{
           ...(stRow.surah_ratings || {}),
           ...(surahTrackerByStudent[stRow.id] || {}),
         },
-        manualWeeklyStars: Array.isArray(stRow.manual_weekly_stars) ? stRow.manual_weekly_stars : [],
+        manualWeeklyStars: (() => {
+          const fromStudentRow: ManualWeeklyStars[] = Array.isArray(stRow.manual_weekly_stars) ? stRow.manual_weekly_stars : [];
+          const fromTrackerTable: ManualWeeklyStars[] = weeklyStarsByStudent[stRow.id] || [];
+          const combinedMap = new Map<string, ManualWeeklyStars>();
+          fromStudentRow.forEach((m) => combinedMap.set(m.weekEndDate, m));
+          fromTrackerTable.forEach((m) => combinedMap.set(m.weekEndDate, m));
+          return Array.from(combinedMap.values());
+        })(),
         entries: studentEntries,
       };
     });
@@ -243,6 +275,7 @@ export async function fetchAllDataFromSupabase(): Promise<{
         name: fRow.name,
         studentIds: Array.isArray(fRow.student_ids) ? fRow.student_ids : [],
         attendanceDays: Array.isArray(fRow.attendance_days) ? fRow.attendance_days : [1, 5],
+        parentPasswordHash: fRow.parent_password_hash || undefined,
       };
     });
 
@@ -370,12 +403,22 @@ export async function syncAllLocalDataToSupabase(data: {
       name: f.name,
       student_ids: f.studentIds,
       attendance_days: f.attendanceDays || [1, 5],
+      parent_password_hash: f.parentPasswordHash || null,
     }));
 
     if (familiesToInsert.length > 0) {
-      const { error: famErr } = await client
+      let { error: famErr } = await client
         .from('families')
         .upsert(familiesToInsert, { onConflict: 'id' });
+
+      // Fallback gracefully if database does not yet have parent_password_hash column
+      if (famErr && famErr.message?.includes('parent_password_hash')) {
+        const strippedFamilies = familiesToInsert.map(({ parent_password_hash, ...rest }) => rest);
+        const retry = await client
+          .from('families')
+          .upsert(strippedFamilies, { onConflict: 'id' });
+        famErr = retry.error;
+      }
 
       if (famErr) {
         console.error('Error syncing families to Supabase:', famErr.message);
@@ -708,6 +751,33 @@ export async function updateFamilyAttendanceInSupabase(
 }
 
 /**
+ * Update family parent password hash in Supabase
+ */
+export async function updateFamilyParentPasswordInSupabase(
+  familyId: string,
+  parentPasswordHash?: string
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client
+      .from('families')
+      .update({ parent_password_hash: parentPasswordHash || null })
+      .eq('id', familyId);
+
+    if (error) {
+      console.warn('Supabase update family parent password hash error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error updating family parent password hash in Supabase:', err);
+    return false;
+  }
+}
+
+/**
  * Update a student's profile photo and frame positioning in Supabase
  */
 export async function updateStudentPhotoInSupabase(
@@ -794,6 +864,69 @@ export async function updateStudentFocusInSupabase(
 }
 
 /**
+ * Save and persist Weekly Star evaluation, title, and motivational message to Supabase
+ * Synchronizes with both public.students (JSONB & columns) and public.student_weekly_stars table
+ */
+export async function saveWeeklyStarSettingsInSupabase(
+  studentId: string,
+  weekEndDate: string,
+  settings: {
+    message: string;
+    title: string;
+    manualStars?: number;
+    disableAuto: boolean;
+  },
+  allManualWeeklyStars: ManualWeeklyStars[]
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    // 1. Update students table (JSONB column manual_weekly_stars + motivational_message)
+    try {
+      await client
+        .from('students')
+        .update({
+          manual_weekly_stars: allManualWeeklyStars,
+          motivational_message: settings.message ? settings.message.trim() : null,
+        })
+        .eq('id', studentId);
+    } catch (err) {
+      console.warn('Supabase update manual_weekly_stars in students table notice:', err);
+    }
+
+    // 2. Upsert into dedicated student_weekly_stars table
+    try {
+      const { error: starTableError } = await client
+        .from('student_weekly_stars')
+        .upsert(
+          {
+            student_id: studentId,
+            week_end_date: weekEndDate,
+            stars: typeof settings.manualStars === 'number' ? settings.manualStars : 5,
+            disabled_auto: settings.disableAuto,
+            title: settings.title ? settings.title.trim() : null,
+            message: settings.message ? settings.message.trim() : null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'student_id,week_end_date' }
+        );
+
+      if (starTableError) {
+        console.warn('Supabase student_weekly_stars table upsert notice:', starTableError.message);
+      }
+    } catch (starTableErr) {
+      console.warn('Supabase student_weekly_stars table notice:', starTableErr);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error saving weekly star settings to Supabase:', err);
+    return false;
+  }
+}
+
+/**
  * Realtime subscriptions: Listen to changes on entries, students, or families
  */
 export function subscribeToSupabaseChanges(onDataChange: () => void): () => void {
@@ -821,6 +954,11 @@ export function subscribeToSupabaseChanges(onDataChange: () => void): () => void
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'student_surah_tracker' },
+        () => onDataChange()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'student_weekly_stars' },
         () => onDataChange()
       )
       .subscribe();

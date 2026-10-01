@@ -20,43 +20,43 @@ export const SURAH_STATUS_OPTIONS: SurahStatusMeta[] = [
     value: 'not_memorized',
     label: 'Not Memorized',
     shortLabel: 'Not Memorized',
-    bgColor: '#808080',
-    textColor: '#FFFFFF',
+    bgColor: '#94A3B8',
+    textColor: '#1F2A3D',
   },
   {
     value: 'in_progress',
     label: 'New Memorization (In progress)',
     shortLabel: 'In progress',
-    bgColor: '#E033F5',
-    textColor: '#FFFFFF',
+    bgColor: '#EE7AF2',
+    textColor: '#1F2A3D',
   },
   {
     value: 'strong',
     label: 'Memorized and reviewed (strong)',
     shortLabel: 'strong',
-    bgColor: '#23953F',
-    textColor: '#FFFFFF',
+    bgColor: '#82CF85',
+    textColor: '#1F2A3D',
   },
   {
     value: 'medium',
     label: 'Memorized and reviewed (medium)',
     shortLabel: 'medium',
-    bgColor: '#FA8400',
-    textColor: '#FFFFFF',
+    bgColor: '#FBB469',
+    textColor: '#1F2A3D',
   },
   {
     value: 'weak',
     label: 'Memorized and reviewed (weak)',
     shortLabel: 'weak',
-    bgColor: '#DE382F',
-    textColor: '#FFFFFF',
+    bgColor: '#FF8577',
+    textColor: '#1F2A3D',
   },
   {
     value: 'forgot',
     label: 'Memorized - Forgot - Review Again',
     shortLabel: 'Forgot',
-    bgColor: '#2B72D4',
-    textColor: '#FFFFFF',
+    bgColor: '#6BA4F8',
+    textColor: '#1F2A3D',
   },
 ];
 
@@ -416,13 +416,13 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
       }
       return {
         surahName: surah.arabicName,
-        ayahRange: `${max}–${min}`,
+        ayahRange: `${min}-${max}`,
         isFullSurah: false,
       };
     }
   }
 
-  // Helper to reorder numeric range: swap small and big numbers, strictly without parentheses
+  // Helper to format numeric range in ascending order: strictly min-max without parentheses
   const formatRangePart = (rawPart: string): string => {
     let p = convertEasternNumerals(rawPart).replace(/[()]/g, '').trim();
     if (
@@ -440,7 +440,7 @@ export function parseHomeworkDisplay(text: string): ParsedHomeworkDisplay | null
       if (n1 !== n2) {
         const min = Math.min(n1, n2);
         const max = Math.max(n1, n2);
-        return `${max}–${min}`;
+        return `${min}-${max}`;
       }
     }
     return p;

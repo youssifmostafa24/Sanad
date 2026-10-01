@@ -160,13 +160,13 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
                 key={opt.value}
                 type="button"
                 onClick={() => setStatusFilter(isSelected ? 'all' : opt.value)}
-                className={`px-2.5 py-1 rounded-full text-white font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                  isSelected ? 'ring-2 ring-offset-1 ring-[#0E5C56]' : 'opacity-90 hover:opacity-100'
+                className={`px-2.5 py-1 rounded-full text-[#1F2A3D] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs border border-black/5 ${
+                  isSelected ? 'ring-2 ring-offset-1 ring-[#0E5C56]' : 'opacity-95 hover:opacity-100'
                 }`}
                 style={{ backgroundColor: opt.bgColor }}
               >
-                <span>{opt.shortLabel}</span>
-                <span className="px-1.5 py-0.2 bg-black/20 rounded-full text-[10px] tabular-nums">
+                <span className="text-xs font-bold text-[#1F2A3D]">{opt.shortLabel}</span>
+                <span className="px-1.5 py-0.2 bg-black/10 text-[#1F2A3D] rounded-full text-[10px] font-bold tabular-nums">
                   {count}
                 </span>
               </button>
@@ -247,8 +247,8 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
                         });
                       }
                     }}
-                    className={`relative px-2 py-3 rounded-xl shadow-2xs flex items-center justify-center text-center transition-all hover:brightness-105 active:scale-95 min-h-[46px] border border-white/20 select-none ${
-                      isTeacherMode ? 'cursor-pointer hover:ring-2 hover:ring-white/60' : 'cursor-default'
+                    className={`relative px-2 py-3 rounded-xl shadow-2xs flex items-center justify-center text-center transition-all hover:brightness-105 active:scale-95 min-h-[46px] border border-black/10 select-none ${
+                      isTeacherMode ? 'cursor-pointer hover:ring-2 hover:ring-[#1F2A3D]/40' : 'cursor-default'
                     }`}
                     style={{
                       backgroundColor: meta.bgColor,
@@ -260,11 +260,11 @@ export const SurahProgressModal: React.FC<SurahProgressModalProps> = ({
                     }
                   >
                     {/* Surah Name: English - Arabic */}
-                    <div className="flex items-center justify-center gap-1 w-full max-w-full px-1 select-none pointer-events-none truncate text-white drop-shadow-2xs">
-                      <span className="text-[11px] sm:text-xs font-medium text-white/95 font-sans tracking-tight shrink-0">
+                    <div className="flex items-center justify-center gap-1.5 w-full max-w-full px-1 select-none pointer-events-none truncate text-[#1F2A3D]">
+                      <span className="text-[11px] sm:text-xs font-bold text-[#1F2A3D] font-sans tracking-tight shrink-0">
                         {surah.name}
                       </span>
-                      <span className="text-xs sm:text-[13px] font-bold font-serif truncate">
+                      <span className="text-xs sm:text-[13px] font-bold font-serif truncate text-[#1F2A3D]">
                         - {surah.arabicName}
                       </span>
                     </div>

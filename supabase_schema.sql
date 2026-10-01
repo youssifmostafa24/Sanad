@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.families (
     name TEXT NOT NULL,
     student_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     attendance_days JSONB DEFAULT '[1, 5]'::jsonb,
+    parent_password_hash TEXT, -- SHA-256 hash for parent family-scoped login
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -27,7 +28,23 @@ CREATE TABLE IF NOT EXISTS public.students (
     tilawa_ayah INTEGER DEFAULT 1,
     surah_ratings JSONB DEFAULT '{}'::jsonb,
     manual_weekly_stars JSONB DEFAULT '[]'::jsonb,
+    motivational_message TEXT,
+    memorization_focus TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2.1 Create Dedicated Table for Weekly Stars & Motivational Messages
+CREATE TABLE IF NOT EXISTS public.student_weekly_stars (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id TEXT NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    week_end_date TEXT NOT NULL, -- Format: YYYY-MM-DD
+    stars NUMERIC(3, 1) NOT NULL DEFAULT 5, -- 0 to 5
+    disabled_auto BOOLEAN DEFAULT false,
+    title TEXT, -- Written Title next to stars
+    message TEXT, -- Written Motivational Words / Notes
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT student_weekly_stars_unique UNIQUE (student_id, week_end_date)
 );
 
 -- 3. Create Homework Entries Table
@@ -39,8 +56,14 @@ CREATE TABLE IF NOT EXISTS public.homework_entries (
     hifz_grade INTEGER, -- 100, 80, 60, 40, 20 or null
     murajaa_text TEXT DEFAULT '',
     murajaa_grade INTEGER, -- 100, 80, 60, 40, 20 or null
+    on_time_score INTEGER, -- 100, 80, 60, 40 or null (On-time score)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Migration safety for already existing tables:
+ALTER TABLE IF EXISTS public.homework_entries ADD COLUMN IF NOT EXISTS on_time_score INTEGER;
+ALTER TABLE IF EXISTS public.entries ADD COLUMN IF NOT EXISTS on_time_score INTEGER;
+ALTER TABLE IF EXISTS public.families ADD COLUMN IF NOT EXISTS parent_password_hash TEXT;
 
 -- 4. Create Indexes for High Performance
 CREATE INDEX IF NOT EXISTS idx_homework_entries_student_id ON public.homework_entries(student_id);
@@ -51,6 +74,10 @@ CREATE INDEX IF NOT EXISTS idx_students_family_id ON public.students(family_id);
 ALTER TABLE public.families ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.homework_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_weekly_stars ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access on student_weekly_stars" ON public.student_weekly_stars;
+CREATE POLICY "Allow public access on student_weekly_stars" ON public.student_weekly_stars FOR ALL USING (true) WITH CHECK (true);
 
 -- 6. Create Open Permissive Policies for the Web Client (anon key access)
 DROP POLICY IF EXISTS "Allow public read access on families" ON public.families;

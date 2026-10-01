@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ArrowUp } from 'lucide-react';
 import { Entry, GradeValue, SurahMemorizationStatus } from '../types';
 import { getWeekdayShort, getDayOfMonth, parseLocalDate } from '../utils/dateUtils';
 import { GradeBadge } from './GradeBadge';
@@ -21,6 +20,7 @@ interface HomeworkRowProps {
   selectedMonthPrefix?: string;
   studentSurahRatings?: Record<number, SurahMemorizationStatus>;
   showOnTime?: boolean;
+  isHighlighted?: boolean;
   onOpenStudentNotes?: () => void;
   onUpdateEntry: (updated: Entry) => void;
   onDeleteEntry: (entryId: string) => void;
@@ -36,6 +36,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   selectedMonthPrefix,
   studentSurahRatings,
   showOnTime = false,
+  isHighlighted = false,
   onOpenStudentNotes,
   onUpdateEntry,
   onDeleteEntry,
@@ -96,27 +97,33 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
 
   const hifzSurah = getSurahFromHomework(entry.hifzText);
   const hifzSurahStatus =
-    hifzSurah && studentSurahRatings
-      ? studentSurahRatings[hifzSurah.number] || 'not_memorized'
-      : 'not_memorized';
+    hifzSurah && studentSurahRatings && studentSurahRatings[hifzSurah.number]
+      ? studentSurahRatings[hifzSurah.number]
+      : 'strong';
 
   const murajaaSurah = getSurahFromHomework(cleanMurajaa || entry.murajaaText);
   const murajaaSurahStatus =
-    murajaaSurah && studentSurahRatings
-      ? studentSurahRatings[murajaaSurah.number] || 'not_memorized'
-      : 'not_memorized';
+    murajaaSurah && studentSurahRatings && studentSurahRatings[murajaaSurah.number]
+      ? studentSurahRatings[murajaaSurah.number]
+      : 'medium';
 
   return (
     <div
       id={`entry-row-${entry.id}`}
-      className={`flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-150 ${
-        !isTeacherMode && isSingleMostRecentInView ? 'mb-9 sm:mb-10' : ''
+      className={`flex items-stretch gap-1.5 sm:gap-2 w-full group transition-all duration-300 rounded-2xl ${
+        isHighlighted
+          ? 'ring-2 ring-[#B8860B] ring-offset-2 ring-offset-[#FBF6E8] scale-[1.01] shadow-md'
+          : ''
       }`}
     >
-      {/* Left Card: Date, compact, bold weekday, editable date in Teacher mode */}
+      {/* Left Card: Date, compact, bold weekday, highlighted for latest homework entry */}
       <div
         id={`date-card-${entry.id}`}
-        className="relative w-10 sm:w-11 bg-white rounded-2xl flex flex-col items-center justify-center shrink-0 py-1 px-0.5 text-center transition-colors select-none"
+        className={`relative w-10 sm:w-11 rounded-2xl flex flex-col items-center justify-center shrink-0 py-1 px-0.5 text-center transition-all select-none ${
+          isSingleMostRecentInView
+            ? 'bg-[#156E67] shadow-xs'
+            : 'bg-white'
+        }`}
       >
         {/* Teacher Mode: Delete "✕" */}
         {isTeacherMode && (
@@ -132,7 +139,11 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         )}
 
         {/* Weekday - High contrast, clearly readable */}
-        <span className="text-[10.5px] sm:text-[11.5px] font-sans font-extrabold text-[#1F2A3D] uppercase tracking-tight sm:tracking-normal leading-none pt-0.5">
+        <span
+          className={`text-[10.5px] sm:text-[11.5px] font-sans font-extrabold uppercase tracking-tight sm:tracking-normal leading-none pt-0.5 ${
+            isSingleMostRecentInView ? 'text-white' : 'text-[#1F2A3D]'
+          }`}
+        >
           {weekday}
         </span>
 
@@ -142,7 +153,13 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
             className="relative cursor-pointer group/date my-0.5"
             title="Click to change date"
           >
-            <span className="text-base sm:text-lg font-sans font-extrabold text-[#0E5C56] group-hover/date:text-[#B8860B] leading-tight tabular-nums transition-colors block underline decoration-dotted decoration-[#B8860B]/60 underline-offset-2">
+            <span
+              className={`text-base sm:text-lg font-sans font-extrabold leading-tight tabular-nums transition-colors block underline decoration-dotted underline-offset-2 ${
+                isSingleMostRecentInView
+                  ? 'text-white group-hover/date:text-[#F8CB52] decoration-white/60'
+                  : 'text-[#0E5C56] group-hover/date:text-[#B8860B] decoration-[#B8860B]/60'
+              }`}
+            >
               {dayOfMonth}
             </span>
             <input
@@ -161,7 +178,11 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
             />
           </div>
         ) : (
-          <span className="text-base sm:text-lg font-sans font-extrabold text-[#0E5C56] leading-tight my-0.5 tabular-nums">
+          <span
+            className={`text-base sm:text-lg font-sans font-extrabold leading-tight my-0.5 tabular-nums ${
+              isSingleMostRecentInView ? 'text-white' : 'text-[#0E5C56]'
+            }`}
+          >
             {dayOfMonth}
           </span>
         )}
@@ -169,7 +190,11 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         {/* If this day was carried over from the previous month to complete this week */}
         {isDifferentMonth && (
           <span
-            className="text-[8px] font-extrabold text-[#B8860B] bg-[#B8860B]/15 px-1 py-0.2 rounded-xs uppercase tracking-tighter"
+            className={`text-[8px] font-extrabold px-1 py-0.2 rounded-xs uppercase tracking-tighter ${
+              isSingleMostRecentInView
+                ? 'text-white bg-white/20'
+                : 'text-[#B8860B] bg-[#B8860B]/15'
+            }`}
             title={`Carried over from previous month (${entry.date}) to complete the week`}
           >
             {monthShort}
@@ -193,14 +218,14 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
             ? 'Click blank space to edit focus notes & recitation'
             : 'Click to view memorization focus notes & recitation'
         }
-        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1 px-2 sm:py-1 sm:px-2.5 flex flex-col justify-center relative transition-all ${cardBorder} hover:shadow-xs cursor-pointer max-h-[82px] sm:max-h-[86px] overflow-hidden`}
+        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1 px-2 sm:py-1 sm:px-2.5 flex flex-col justify-center relative transition-all ${cardBorder} hover:shadow-xs cursor-pointer min-h-[68px] sm:min-h-[72px] overflow-hidden`}
       >
         {/* Portion 1: Hifz Homework */}
         <div
           id={`hifz-row-${entry.id}`}
-          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[28px]"
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[30px]"
         >
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-visible">
+          <div className="flex-1 min-w-0 flex items-center gap-2 overflow-visible">
             {/* Surah Status Dot placed to the left beside the numbers */}
             {hifzSurah && (
               <SurahStatusDot
@@ -217,31 +242,27 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 id={`hifz-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('hifz')}
-                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-2 transition-opacity hover:opacity-75 text-left py-0.5"
                 title="Click to select Surah & Ayahs"
               >
                 {parsedHifz ? (
-                  parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedHifz.surahName}
-                      </span>
-                      <span className="text-[#B8860B] font-bold text-sm sm:text-base shrink-0">
-                        كاملة
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[#1F2A3D] font-sans font-bold text-base sm:text-lg truncate leading-tight" dir="rtl">
+                      {parsedHifz.surahName}
                     </span>
-                  ) : (
-                    <>
-                      <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                        {parsedHifz.ayahRange}
-                      </span>
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedHifz.surahName}
-                      </span>
-                    </>
-                  )
+                    <span
+                      className={`px-2.5 sm:px-3 py-0.5 rounded-full bg-slate-100 font-bold text-sm sm:text-base tabular-nums leading-none tracking-tight shrink-0 shadow-2xs ${
+                        parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة'
+                          ? 'text-[#B8860B]'
+                          : 'text-[#1F2A3D]'
+                      }`}
+                      dir={parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
+                    >
+                      {parsedHifz.ayahRange}
+                    </span>
+                  </div>
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
+                  <span className="text-[#1F2A3D] font-sans font-medium text-sm sm:text-base truncate" dir="auto">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -249,29 +270,25 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 )}
               </button>
             ) : (
-              <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
+              <div className="leading-tight flex items-center gap-2 whitespace-nowrap truncate min-w-0">
                 {parsedHifz ? (
-                  parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedHifz.surahName}
-                      </span>
-                      <span className="text-[#B8860B] font-bold text-sm sm:text-base shrink-0">
-                        كاملة
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[#1F2A3D] font-sans font-bold text-base sm:text-lg truncate leading-tight" dir="rtl">
+                      {parsedHifz.surahName}
                     </span>
-                  ) : (
-                    <>
-                      <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                        {parsedHifz.ayahRange}
-                      </span>
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedHifz.surahName}
-                      </span>
-                    </>
-                  )
+                    <span
+                      className={`px-2.5 sm:px-3 py-0.5 rounded-full bg-slate-100 font-bold text-sm sm:text-base tabular-nums leading-none tracking-tight shrink-0 shadow-2xs ${
+                        parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة'
+                          ? 'text-[#B8860B]'
+                          : 'text-[#1F2A3D]'
+                      }`}
+                      dir={parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
+                    >
+                      {parsedHifz.ayahRange}
+                    </span>
+                  </div>
                 ) : entry.hifzText ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
+                  <span className="text-[#1F2A3D] font-sans font-medium text-sm sm:text-base truncate" dir="auto">
                     {entry.hifzText.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -300,9 +317,9 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         {/* Portion 2: Murajaa Homework */}
         <div
           id={`murajaa-row-${entry.id}`}
-          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[26px] sm:min-h-[28px]"
+          className="flex items-center justify-between gap-1.5 sm:gap-2 w-full min-h-[28px] sm:min-h-[30px]"
         >
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-visible">
+          <div className="flex-1 min-w-0 flex items-center gap-2 overflow-visible">
             {/* Surah Status Dot placed to the left beside the numbers */}
             {murajaaSurah && (
               <SurahStatusDot
@@ -319,31 +336,27 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 id={`murajaa-input-${entry.id}`}
                 type="button"
                 onClick={() => setPickerTarget('murajaa')}
-                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-1.5 transition-opacity hover:opacity-75 text-left py-0.5"
+                className="text-[#1F2A3D] bg-transparent leading-tight focus:outline-none cursor-pointer truncate flex items-center justify-start gap-2 transition-opacity hover:opacity-75 text-left py-0.5"
                 title="Click to select Surah & Ayahs"
               >
                 {parsedMurajaa ? (
-                  parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedMurajaa.surahName}
-                      </span>
-                      <span className="text-[#B8860B] font-bold text-sm sm:text-base shrink-0">
-                        كاملة
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[#1F2A3D] font-sans font-bold text-base sm:text-lg truncate leading-tight" dir="rtl">
+                      {parsedMurajaa.surahName}
                     </span>
-                  ) : (
-                    <>
-                      <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                        {parsedMurajaa.ayahRange}
-                      </span>
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedMurajaa.surahName}
-                      </span>
-                    </>
-                  )
+                    <span
+                      className={`px-2.5 sm:px-3 py-0.5 rounded-full bg-slate-100 font-bold text-sm sm:text-base tabular-nums leading-none tracking-tight shrink-0 shadow-2xs ${
+                        parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة'
+                          ? 'text-[#B8860B]'
+                          : 'text-[#1F2A3D]'
+                      }`}
+                      dir={parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
+                    >
+                      {parsedMurajaa.ayahRange}
+                    </span>
+                  </div>
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
+                  <span className="text-[#1F2A3D] font-sans font-medium text-sm sm:text-base truncate" dir="auto">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -351,29 +364,25 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                 )}
               </button>
             ) : (
-              <div className="leading-tight flex items-center gap-1.5 whitespace-nowrap truncate">
+              <div className="leading-tight flex items-center gap-2 whitespace-nowrap truncate min-w-0">
                 {parsedMurajaa ? (
-                  parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? (
-                    <span className="flex items-center gap-1.5 truncate" dir="rtl">
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedMurajaa.surahName}
-                      </span>
-                      <span className="text-[#B8860B] font-bold text-sm sm:text-base shrink-0">
-                        كاملة
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[#1F2A3D] font-sans font-bold text-base sm:text-lg truncate leading-tight" dir="rtl">
+                      {parsedMurajaa.surahName}
                     </span>
-                  ) : (
-                    <>
-                      <span className="text-[#B8860B] font-ayah font-extrabold text-base sm:text-lg tabular-nums shrink-0" dir="ltr">
-                        {parsedMurajaa.ayahRange}
-                      </span>
-                      <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate">
-                        {parsedMurajaa.surahName}
-                      </span>
-                    </>
-                  )
+                    <span
+                      className={`px-2.5 sm:px-3 py-0.5 rounded-full bg-slate-100 font-bold text-sm sm:text-base tabular-nums leading-none tracking-tight shrink-0 shadow-2xs ${
+                        parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة'
+                          ? 'text-[#B8860B]'
+                          : 'text-[#1F2A3D]'
+                      }`}
+                      dir={parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
+                    >
+                      {parsedMurajaa.ayahRange}
+                    </span>
+                  </div>
                 ) : cleanMurajaa ? (
-                  <span className="text-[#1F2A3D] font-medium text-base sm:text-lg truncate" dir="auto">
+                  <span className="text-[#1F2A3D] font-sans font-medium text-sm sm:text-base truncate" dir="auto">
                     {cleanMurajaa.replace(/[()]/g, '').trim()}
                   </span>
                 ) : (
@@ -392,29 +401,6 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
             />
           </div>
         </div>
-
-        {/* Student Mode: "Your Active Homework" badge - restyled to match WeeklyStarBand gold/amber style (Req 1) */}
-        {!isTeacherMode && isSingleMostRecentInView && (
-          <div
-            id={`your-homework-badge-${entry.id}`}
-            className="absolute top-[calc(100%+5px)] left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center select-none"
-          >
-            {/* Triangular pointer arrow seamlessly attached pointing directly up to the card above */}
-            <div className="w-0 h-0 border-x-[6px] border-x-transparent border-b-[6px] border-b-[#F8CB52] -mb-[0.5px]" />
-
-            {/* Restyled badge matching WeeklyStarBand gold/amber style */}
-            <div
-              className="inline-flex items-center justify-center gap-2 sm:gap-2.5 px-5 py-1 sm:px-6 sm:py-1.5 rounded-full text-xs sm:text-[13px] font-black tracking-wide border border-[#F8CB52]/70 shadow-[0_4px_16px_-4px_rgba(248,203,82,0.35)] backdrop-blur-[2px] text-[#8C6700] whitespace-nowrap"
-              style={{
-                background:
-                  'linear-gradient(90deg, rgba(248, 203, 82, 0.5) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(248, 203, 82, 0.5) 100%)',
-              }}
-            >
-              <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#8C6700] stroke-[2.5] shrink-0" />
-              <span className="font-serif font-extrabold leading-tight select-none">Your Active Homework</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* On Time Slot */}

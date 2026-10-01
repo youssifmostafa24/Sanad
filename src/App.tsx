@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars } from './types';
+import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars, AuthState } from './types';
 import { getInitialData } from './data/seedData';
 import {
   formatLocalDate,
@@ -18,7 +18,8 @@ import { AddHomeworkRow } from './components/AddHomeworkRow';
 import { WeeklyStarBand } from './components/WeeklyStarBand';
 import { StudentSwitcher } from './components/StudentSwitcher';
 import { StudentSidebarDrawer } from './components/StudentSidebarDrawer';
-import { MonthNavigator } from './components/WeekNavigator';
+import { StudentTopSection } from './components/StudentTopSection';
+import { MonthPickerBottomSheet } from './components/MonthPickerBottomSheet';
 import { MainPortal } from './components/MainPortal';
 import { StudentAttendanceModal } from './components/StudentAttendanceModal';
 import { SurahProgressModal } from './components/SurahProgressModal';
@@ -26,10 +27,11 @@ import { StudentSettingsModal } from './components/StudentSettingsModal';
 import { StudentFocusNotesModal } from './components/StudentFocusNotesModal';
 import { VoiceHomeworkModal } from './components/VoiceHomeworkModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { isTeacherAuthenticatedStored, setTeacherAuthenticatedStored } from './utils/authUtils';
+import { getStoredAuthState, setStoredAuthState } from './utils/authUtils';
+import { canEdit } from './utils/permissions';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
 import { getDefaultMotivationalTitle } from './data/starBandPresets';
-import { BookOpen, ArrowDown, ChevronRight } from 'lucide-react';
+import { BookOpen, ArrowDown, ChevronRight, Lock } from 'lucide-react';
 import { isSupabaseConfigured } from './lib/supabase';
 import {
   fetchAllDataFromSupabase,
@@ -39,8 +41,10 @@ import {
   updateStudentTilawaInSupabase,
   updateStudentAttendanceInSupabase,
   updateFamilyAttendanceInSupabase,
+  updateFamilyParentPasswordInSupabase,
   updateStudentPhotoInSupabase,
   updateStudentFocusInSupabase,
+  saveWeeklyStarSettingsInSupabase,
   subscribeToSupabaseChanges,
   syncAllLocalDataToSupabase,
 } from './services/supabaseService';
@@ -134,11 +138,7 @@ export default function App() {
                   entries: Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date)),
                 };
               }
-              const localSt = prev.students.find((s) => s.id === remoteSt.id);
-              if (localSt && localSt.entries && localSt.entries.length > 0) {
-                return { ...remoteSt, entries: localSt.entries };
-              }
-              return remoteSt;
+              return { ...remoteSt, entries: [] };
             });
 
             return {
@@ -174,11 +174,7 @@ export default function App() {
                   entries: Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date)),
                 };
               }
-              const localSt = prev.students.find((s) => s.id === remoteSt.id);
-              if (localSt && localSt.entries && localSt.entries.length > 0) {
-                return { ...remoteSt, entries: localSt.entries };
-              }
-              return remoteSt;
+              return { ...remoteSt, entries: [] };
             });
             return {
               families: remoteData.families,
@@ -243,6 +239,10 @@ export default function App() {
       }
     }
     // Check localStorage for returning student/family only if no URL params
+    const initialAuth = getStoredAuthState();
+    if (initialAuth.role === 'parent' && initialAuth.scopedFamilyId) {
+      return initialAuth.scopedFamilyId;
+    }
     try {
       const savedFam = localStorage.getItem('sanad_last_family_id');
       if (savedFam && data.families.some((f) => f.id === savedFam)) {
@@ -259,6 +259,9 @@ export default function App() {
     const hasStudentOrFam = params.get('fam') || params.get('student') || params.get('st');
     if (hasStudentOrFam) return 'family';
 
+    const initialAuth = getStoredAuthState();
+    if (initialAuth.role === 'parent') return 'family';
+
     try {
       const savedStudent = localStorage.getItem('sanad_last_student_id');
       if (savedStudent && data.students.some((s) => s.id === savedStudent)) {
@@ -267,16 +270,17 @@ export default function App() {
     } catch {}
 
     // Only teachers start in the multi-family portal by default
-    return isTeacherAuthenticatedStored() ? 'portal' : 'family';
+    return initialAuth.role === 'teacher' ? 'portal' : 'family';
   });
 
-  // Persistent Teacher Authentication state (Password: 122333 / ١٢٢٣٣٣)
-  const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(() => {
-    return isTeacherAuthenticatedStored();
+  // Role-based auth state: 'teacher' | 'parent' | 'student'
+  const [authState, setAuthState] = useState<AuthState>(() => {
+    return getStoredAuthState();
   });
 
-  // Teacher mode active status
-  const [isTeacherMode, setIsTeacherMode] = useState<boolean>(false);
+  const isTeacher = authState.role === 'teacher';
+  // Teacher mode active status (teachers can toggle it on/off; parents have family edit enabled)
+  const [teacherModeActive, setTeacherModeActive] = useState<boolean>(true);
 
   // Modals state
   const [isFamilyAttendanceOpen, setIsFamilyAttendanceOpen] = useState<boolean>(false);
@@ -288,19 +292,43 @@ export default function App() {
     return settingsStudentId ? data.students.find((s) => s.id === settingsStudentId) || null : null;
   }, [data.students, settingsStudentId]);
 
-  const handleTeacherLoginSuccess = () => {
-    setIsTeacherAuthenticated(true);
-    setTeacherAuthenticatedStored(true);
+  const handleLoginSuccess = (newAuth: AuthState) => {
+    setAuthState(newAuth);
+    setStoredAuthState(newAuth);
+    if (newAuth.role === 'teacher') {
+      setTeacherModeActive(true);
+      setCurrentView('portal');
+    } else if (newAuth.role === 'parent' && newAuth.scopedFamilyId) {
+      setCurrentView('family');
+      const parentFam = data.families.find((f) => f.id === newAuth.scopedFamilyId);
+      if (parentFam) {
+        setActiveFamilyId(parentFam.id);
+        if (parentFam.studentIds[0]) {
+          setActiveStudentId(parentFam.studentIds[0]);
+        }
+      }
+    }
   };
 
-  const handleTeacherLogout = () => {
-    setIsTeacherAuthenticated(false);
-    setIsTeacherMode(false);
-    setTeacherAuthenticatedStored(false);
+  const handleLogout = () => {
+    const studentAuth: AuthState = { role: 'student' };
+    setAuthState(studentAuth);
+    setStoredAuthState(studentAuth);
+    setTeacherModeActive(false);
   };
 
   const handleToggleTeacherMode = () => {
-    setIsTeacherMode((prev) => !prev);
+    setTeacherModeActive((prev) => !prev);
+  };
+
+  const handleUpdateFamilyParentPassword = (familyId: string, passwordHash?: string) => {
+    setData((prev) => ({
+      ...prev,
+      families: prev.families.map((f) =>
+        f.id === familyId ? { ...f, parentPasswordHash: passwordHash } : f
+      ),
+    }));
+    updateFamilyParentPasswordInSupabase(familyId, passwordHash);
   };
 
   // Slide-out sidebar drawer state for student pages navigation
@@ -418,10 +446,10 @@ export default function App() {
     }
   };
 
-  // Return to Main Portal (gated for teachers)
+  // Return to Main Portal (gated for teachers only)
   const handleOpenPortal = () => {
-    if (!isTeacherAuthenticated) {
-      // Non-teacher: return to their active student page or stay
+    if (authState.role !== 'teacher') {
+      // Non-teacher / parent: return to their active student page or stay
       return;
     }
     setCurrentView('portal');
@@ -454,60 +482,47 @@ export default function App() {
     }));
   };
 
-  // Monthly Navigation State
+  // Month Navigation State: Automatically defaults to current month only
+  const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
   const now = new Date();
-  const [selectedYearMonth, setSelectedYearMonth] = useState<{ year: number; month: number }>(() => ({
+  const [visibleYearMonth, setVisibleYearMonth] = useState<{ year: number; month: number }>(() => ({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
   }));
 
-  const isCurrentMonth = useMemo(() => {
-    const n = new Date();
-    return selectedYearMonth.year === n.getFullYear() && selectedYearMonth.month === n.getMonth() + 1;
-  }, [selectedYearMonth]);
+  const visibleMonthLabel = useMemo(() => {
+    const mName = MONTH_NAMES[visibleYearMonth.month - 1] || 'October';
+    return `${mName} ${visibleYearMonth.year}`;
+  }, [visibleYearMonth]);
 
-  const selectedMonthPrefix = useMemo(() => {
-    return `${selectedYearMonth.year}-${String(selectedYearMonth.month).padStart(2, '0')}`;
-  }, [selectedYearMonth]);
+  const visibleMonthPrefix = useMemo(() => {
+    return `${visibleYearMonth.year}-${String(visibleYearMonth.month).padStart(2, '0')}`;
+  }, [visibleYearMonth]);
 
-  const selectedMonthLabel = useMemo(() => {
-    const date = new Date(selectedYearMonth.year, selectedYearMonth.month - 1, 1);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }, [selectedYearMonth]);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
+  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
 
-  // Month navigation actions
-  const handlePrevMonth = () => {
-    setSelectedYearMonth((prev) => {
-      if (prev.month === 1) {
-        return { year: prev.year - 1, month: 12 };
-      }
-      return { year: prev.year, month: prev.month - 1 };
-    });
-  };
-
-  const handleNextMonth = () => {
-    setSelectedYearMonth((prev) => {
-      if (prev.month === 12) {
-        return { year: prev.year + 1, month: 1 };
-      }
-      return { year: prev.year, month: prev.month + 1 };
-    });
-  };
-
-  const handleGoToCurrentMonth = () => {
-    const n = new Date();
-    setSelectedYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
-  };
-
-  // Filter entries for the active student in the selected month
-  // Per user requirement: When a new month begins with day 1, any days from the previous month
-  // that belong to this opening week are transferred and displayed in the current month from the week's start,
-  // so that the entire week is evaluated together with its weekly star band appearing right below it.
-  const monthEntries = useMemo(() => {
+  // Displays ONLY entries for the currently selected month
+  const displayedEntries = useMemo(() => {
     if (!activeStudent?.entries) return [];
 
-    const nextMonthYear = selectedYearMonth.month === 12 ? selectedYearMonth.year + 1 : selectedYearMonth.year;
-    const nextMonthNum = selectedYearMonth.month === 12 ? 1 : selectedYearMonth.month + 1;
+    const selectedPrefix = `${visibleYearMonth.year}-${String(visibleYearMonth.month).padStart(2, '0')}`;
+    const nextMonthYear = visibleYearMonth.month === 12 ? visibleYearMonth.year + 1 : visibleYearMonth.year;
+    const nextMonthNum = visibleYearMonth.month === 12 ? 1 : visibleYearMonth.month + 1;
     const nextMonthPrefix = `${nextMonthYear}-${String(nextMonthNum).padStart(2, '0')}`;
     const nextMonthStartStr = `${nextMonthPrefix}-01`;
     const todayStr = formatLocalDate(new Date());
@@ -519,23 +534,28 @@ export default function App() {
 
       // 1. If the week concludes (on Thursday) in this selected month, all days of this week
       // (including those starting in the previous month) belong to this month's view!
-      if (weekEndMonthPrefix === selectedMonthPrefix) {
+      if (weekEndMonthPrefix === selectedPrefix) {
         return true;
       }
 
       // 2. If the entry's calendar date is in this selected month, but its week concludes in the next month:
       // - If the next month has NOT started yet, keep it in the current view so ongoing sessions can be graded.
-      // - Once the next month starts, that week is transferred to the new month as requested.
-      if (e.date.startsWith(selectedMonthPrefix) && !nextMonthHasStarted) {
+      // - Once the next month starts, that week is transferred to the new month.
+      if (e.date.startsWith(selectedPrefix) && !nextMonthHasStarted) {
         return true;
       }
 
       return false;
     });
 
-    // Deduplicate strictly by date: Ensure only ONE entry ever appears for the same calendar date!
+    const candidateEntries =
+      filtered.length > 0
+        ? filtered
+        : activeStudent.entries.filter((e) => e.date.startsWith(selectedPrefix));
+
+    // Deduplicate strictly by date: Ensure only ONE entry ever appears for the same calendar date
     const uniqueEntriesByDate = new Map<string, Entry>();
-    filtered.forEach((e) => {
+    candidateEntries.forEach((e) => {
       if (!uniqueEntriesByDate.has(e.date)) {
         uniqueEntriesByDate.set(e.date, e);
       } else {
@@ -550,78 +570,41 @@ export default function App() {
       }
     });
 
-    // Sort ASCENDING (first day of month to last)
     return Array.from(uniqueEntriesByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [activeStudent, selectedMonthPrefix, selectedYearMonth]);
+  }, [activeStudent?.entries, visibleYearMonth]);
 
   // Find the single most recent entry that still has ANY ungraded portion
   const mostRecentUngradedEntryId = useMemo(() => {
-    if (!activeStudent) return null;
+    if (!activeStudent?.entries) return null;
     const sortedAllDesc = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
     const found = sortedAllDesc.find((e) => e.hifzGrade === null || e.murajaaGrade === null);
     return found ? found.id : null;
-  }, [activeStudent]);
+  }, [activeStudent?.entries]);
 
   // Single most-recent entry currently in this month's view
   const singleMostRecentInViewId = useMemo(() => {
-    if (monthEntries.length > 0) {
-      return monthEntries[monthEntries.length - 1].id;
+    if (displayedEntries.length > 0) {
+      return displayedEntries[displayedEntries.length - 1].id;
     }
     return null;
-  }, [monthEntries]);
-
-  // Selected entry from the MonthNavigator timeline
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
-
-  const currentActiveEntryId = useMemo(() => {
-    if (selectedEntryId && monthEntries.some((e) => e.id === selectedEntryId)) {
-      return selectedEntryId;
-    }
-    return singleMostRecentInViewId;
-  }, [selectedEntryId, monthEntries, singleMostRecentInViewId]);
-
-  const handleSelectEntryFromNav = (entryId: string) => {
-    setSelectedEntryId(entryId);
-    const el = document.getElementById(`entry-row-${entryId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
+  }, [displayedEntries]);
 
   // Ref to target the latest homework entry in view
   const latestHomeworkRef = useRef<HTMLDivElement | null>(null);
 
-  // Track which students have had their initial month initialized
-  const initializedStudentMonthRef = useRef<Record<string, boolean>>({});
-
   // Flag to skip resetting scroll to top (e.g., when repeating/adding a homework entry at the bottom)
   const skipResetScrollToTopRef = useRef<boolean>(false);
   const shouldScrollToBottomAfterAddRef = useRef<boolean>(false);
+  const pendingScrollToLatestStudentIdRef = useRef<string | null>(null);
 
-  // Whenever the active student changes (or their initial entries load from Supabase), automatically set the selected month to the month of the student's latest homework
+  // By default, automatically reset to the current month when switching students
   useEffect(() => {
     if (!activeStudentId) return;
-    if (activeStudent?.entries && activeStudent.entries.length > 0) {
-      if (!initializedStudentMonthRef.current[activeStudentId]) {
-        initializedStudentMonthRef.current[activeStudentId] = true;
-        const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-        const latest = sorted[0];
-        if (latest) {
-          const [y, m] = latest.date.split('-').map(Number);
-          if (y && m) {
-            setSelectedYearMonth((prev) => {
-              if (prev.year !== y || prev.month !== m) {
-                return { year: y, month: m };
-              }
-              return prev;
-            });
-          }
-        }
-      }
-    }
-  }, [activeStudentId, activeStudent?.entries?.length]);
+    const n = new Date();
+    setVisibleYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
+  }, [activeStudentId]);
 
-  // Reset scroll to top whenever the student or month changes (normal natural scroll behavior)
+  // Reset scroll to top whenever the student or the selected month changes
   useEffect(() => {
     if (currentView !== 'family') return;
     if (skipResetScrollToTopRef.current) {
@@ -631,7 +614,7 @@ export default function App() {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
-  }, [activeStudentId, selectedYearMonth.year, selectedYearMonth.month, currentView]);
+  }, [activeStudentId, visibleYearMonth.year, visibleYearMonth.month, currentView]);
 
   // Ensure the view stays scrolled to the true bottom when a new entry is added
   useEffect(() => {
@@ -652,35 +635,104 @@ export default function App() {
         setTimeout(() => scrollDown(false), 220);
       });
     }
-  }, [monthEntries.length, selectedYearMonth.year, selectedYearMonth.month]);
+  }, [displayedEntries.length]);
 
-  // Handler to smoothly scroll directly to today's / latest homework entry
-  const handleScrollToTodayHomework = () => {
-    // If latest entry is in a different month, switch to it first
-    if (activeStudent?.entries && activeStudent.entries.length > 0) {
-      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-      const latest = sorted[0];
-      if (latest) {
-        const [y, m] = latest.date.split('-').map(Number);
-        if (y && m && (selectedYearMonth.year !== y || selectedYearMonth.month !== m)) {
-          setSelectedYearMonth({ year: y, month: m });
-        }
+  // Handler to smoothly scroll directly to today's / latest homework entry for any student
+  const scrollToStudentLatestHomework = (targetStudent?: Student) => {
+    const student = targetStudent || activeStudent;
+    if (!student || !student.entries || student.entries.length === 0) return;
+
+    const sorted = [...student.entries].sort((a, b) => b.date.localeCompare(a.date));
+    const latest = sorted[0];
+    if (latest) {
+      const el = document.getElementById(`entry-row-${latest.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+    }
+  };
+
+  // View today's homework: ensures current month is active, then smoothly scrolls to today's entry and highlights it
+  const handleViewTodayHomework = () => {
+    if (!activeStudent || !activeStudent.entries || activeStudent.entries.length === 0) return;
+    const today = new Date();
+    const todayStr = formatLocalDate(today);
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+
+    // Automatically switch to current month if viewing another month
+    if (visibleYearMonth.year !== todayYear || visibleYearMonth.month !== todayMonth) {
+      setVisibleYearMonth({ year: todayYear, month: todayMonth });
     }
 
     setTimeout(() => {
-      if (latestHomeworkRef.current) {
-        latestHomeworkRef.current.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
-      } else if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTo({
-          top: scrollContainerRef.current.scrollHeight,
-          behavior: 'smooth',
-        });
+      let target = activeStudent.entries.find((e) => e.date === todayStr);
+      if (!target) {
+        const prefix = `${todayYear}-${String(todayMonth).padStart(2, '0')}`;
+        const currentEntries = activeStudent.entries
+          .filter((e) => e.date.startsWith(prefix))
+          .sort((a, b) => b.date.localeCompare(a.date));
+        target = currentEntries[0] || [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
       }
-    }, 50);
+
+      if (target) {
+        const el = document.getElementById(`entry-row-${target.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedEntryId(target.id);
+          setTimeout(() => {
+            setHighlightedEntryId((prev) => (prev === target.id ? null : prev));
+          }, 1800);
+        }
+      }
+    }, 80);
+  };
+
+  // Selecting a month in the bottom sheet displays that selected month only
+  const handleSelectMonthFromPicker = (year: number, month: number) => {
+    setVisibleYearMonth({ year, month });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  };
+
+  // When a student switch is triggered by a double-tap, wait for page render then scroll to their latest homework
+  useEffect(() => {
+    if (
+      pendingScrollToLatestStudentIdRef.current &&
+      pendingScrollToLatestStudentIdRef.current === activeStudentId
+    ) {
+      pendingScrollToLatestStudentIdRef.current = null;
+      scrollToStudentLatestHomework();
+    }
+  }, [activeStudentId, displayedEntries]);
+
+  // Handler for double-tapping any student tab in the bottom switcher
+  const handleDoubleTapStudent = (studentId: string) => {
+    const targetStudent = data.students.find((s) => s.id === studentId);
+    if (!targetStudent) return;
+
+    if (studentId === activeStudentId) {
+      // Already active student: scroll to their latest homework entry directly
+      scrollToStudentLatestHomework(targetStudent);
+    } else {
+      // Inactive student: prevent resetting scroll to top, switch student, then scroll to latest
+      skipResetScrollToTopRef.current = true;
+      pendingScrollToLatestStudentIdRef.current = studentId;
+
+      if (targetStudent.entries && targetStudent.entries.length > 0) {
+        const sorted = [...targetStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+        const latest = sorted[0];
+        if (latest) {
+          const [y, m] = latest.date.split('-').map(Number);
+          if (y && m && (visibleYearMonth.year !== y || visibleYearMonth.month !== m)) {
+            setVisibleYearMonth({ year: y, month: m });
+          }
+        }
+      }
+
+      setActiveStudentId(studentId);
+    }
   };
 
   // Scroll listener - Header is permanently fixed and visible at all times
@@ -699,9 +751,13 @@ export default function App() {
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
+        const exists = s.entries.some((e) => e.id === updated.id || e.date === updated.date);
+        const newEntries = exists
+          ? s.entries.map((e) => (e.id === updated.id || e.date === updated.date ? standardUpdated : e))
+          : [...s.entries, standardUpdated];
         return {
           ...s,
-          entries: s.entries.map((e) => (e.id === updated.id || e.date === updated.date ? standardUpdated : e)),
+          entries: newEntries,
         };
       });
       return { ...prev, students: updatedStudents };
@@ -772,7 +828,7 @@ export default function App() {
     }
 
     const [y, m] = nextDate.split('-').map(Number);
-    setSelectedYearMonth({ year: y, month: m });
+    setVisibleYearMonth({ year: y, month: m });
   };
 
   // Find the most recent entry of the current active student (for repeating last homework)
@@ -824,8 +880,8 @@ export default function App() {
     }
 
     const [y, m] = targetDate.split('-').map(Number);
-    if (y && m && (selectedYearMonth.year !== y || selectedYearMonth.month !== m)) {
-      setSelectedYearMonth({ year: y, month: m });
+    if (y && m && (visibleYearMonth.year !== y || visibleYearMonth.month !== m)) {
+      setVisibleYearMonth({ year: y, month: m });
     }
 
     const scrollToTrueBottom = (smooth = true) => {
@@ -1099,6 +1155,34 @@ export default function App() {
     if (isSupabaseConfigured()) {
       const student = data.students.find((s) => s.id === studentId);
       if (student) {
+        const studentManualList = student.manualWeeklyStars || [];
+        const existingIdx = studentManualList.findIndex(
+          (m) => m.weekEndDate === weekEndDate || m.weekEndDate === addDays(weekEndDate, 1)
+        );
+        let listToSave: ManualWeeklyStars[];
+        if (settings.disableAuto || settings.title || settings.message) {
+          const entry: ManualWeeklyStars = {
+            weekEndDate,
+            stars: typeof settings.manualStars === 'number' ? settings.manualStars : 5,
+            disabledAuto: settings.disableAuto,
+            title: settings.title ? settings.title.trim() : undefined,
+            message: settings.message ? settings.message.trim() : undefined,
+          };
+          if (existingIdx >= 0) {
+            listToSave = [...studentManualList];
+            listToSave[existingIdx] = entry;
+          } else {
+            listToSave = [...studentManualList, entry];
+          }
+        } else {
+          listToSave = studentManualList.filter(
+            (m) => m.weekEndDate !== weekEndDate && m.weekEndDate !== addDays(weekEndDate, 1)
+          );
+        }
+
+        saveWeeklyStarSettingsInSupabase(studentId, weekEndDate, settings, listToSave)
+          .catch((err) => console.warn('Supabase weekly stars save notice:', err));
+
         updateStudentFocusInSupabase(
           studentId,
           student.memorizationFocus || '',
@@ -1166,7 +1250,8 @@ export default function App() {
     const initial = getInitialData();
     setData(initial);
     localStorage.removeItem(STORAGE_KEY);
-    handleGoToCurrentMonth();
+    const n = new Date();
+    setVisibleYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
   };
 
   // If in portal view, render the Master Portal
@@ -1177,14 +1262,15 @@ export default function App() {
           families={data.families}
           students={data.students}
           onSelectFamilyAndStudent={handleSelectFamilyAndStudent}
-          isTeacherAuthenticated={isTeacherAuthenticated}
-          onTeacherLoginSuccess={handleTeacherLoginSuccess}
-          onTeacherLogout={handleTeacherLogout}
-          isTeacherMode={isTeacherMode}
+          authState={authState}
+          onLoginSuccess={handleLoginSuccess}
+          onLogout={handleLogout}
+          isTeacherMode={isTeacher && teacherModeActive}
           onToggleTeacherMode={handleToggleTeacherMode}
           onOpenStudentSettings={(st) => setSettingsStudentId(st.id)}
           onSyncToSupabase={() => syncAllLocalDataToSupabase(data)}
           onUpdateFamilyOrder={handleUpdateFamilyOrder}
+          onUpdateFamilyParentPassword={handleUpdateFamilyParentPassword}
         />
         {settingsStudent && (
           <StudentSettingsModal
@@ -1193,7 +1279,7 @@ export default function App() {
             student={settingsStudent}
             familyName={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.name}
             familyId={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id}
-            isTeacherMode={isTeacherMode}
+            isTeacherMode={canEdit(authState, data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id)}
             onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
             onUpdateStudentPhoto={handleUpdateStudentPhoto}
             onUpdateStudentShareToken={handleSaveStudentShareToken}
@@ -1202,6 +1288,42 @@ export default function App() {
       </>
     );
   }
+
+  // Route / Component Guard for Parent Role: block access if attempting to view a different family
+  if (
+    authState.role === 'parent' &&
+    authState.scopedFamilyId &&
+    activeFamily &&
+    activeFamily.id !== authState.scopedFamilyId
+  ) {
+    const myFam = data.families.find((f) => f.id === authState.scopedFamilyId);
+    return (
+      <div className="w-full h-screen flex flex-col items-center justify-center p-6 text-center bg-[#F5EFDD] text-[#1F2A3D]" dir="ltr">
+        <div className="w-16 h-16 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-red-600 mb-4 shadow-sm">
+          <Lock className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-bold mb-2 font-sans text-red-800">
+          غير مصرح بالوصول (Not Authorized)
+        </h1>
+        <p className="text-sm text-[#5B6478] max-w-sm mb-6 leading-relaxed font-sans">
+          حساب ولي الأمر مقيد بعائلتك فقط ({myFam?.name || 'عائلتك'}). لا يمكنك عرض أو تعديل بيانات عائلة أخرى.
+        </p>
+        <button
+          onClick={() => {
+            if (myFam) {
+              setActiveFamilyId(myFam.id);
+              if (myFam.studentIds[0]) setActiveStudentId(myFam.studentIds[0]);
+            }
+          }}
+          className="px-6 py-2.5 rounded-full bg-[#0E5C56] text-white font-bold text-sm shadow-md hover:bg-[#0B4D48] transition-all cursor-pointer active:scale-95"
+        >
+          العودة إلى عائلتي (Return to My Family)
+        </button>
+      </div>
+    );
+  }
+
+  const canEditCurrentFamily = canEdit(authState, activeFamily?.id);
 
   return (
     <div
@@ -1214,17 +1336,16 @@ export default function App() {
     >
       {/* Auto-hiding Header */}
       <Header
-        isTeacherMode={isTeacherMode}
+        authState={authState}
         activeFamily={activeFamily}
-        onEnterTeacherMode={() => setIsTeacherMode(true)}
-        onExitTeacherMode={() => setIsTeacherMode(false)}
+        families={data.families}
+        onLoginSuccess={handleLoginSuccess}
+        onLogout={handleLogout}
         onResetData={handleResetData}
         visible={headerVisible}
         onOpenSidebar={() => setIsSidebarOpen(true)}
         activeStudentName={activeStudent?.name || activeStudent?.arabicName}
         onOpenPortal={handleOpenPortal}
-        isTeacherAuthenticated={isTeacherAuthenticated}
-        onTeacherLoginSuccess={handleTeacherLoginSuccess}
         onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
         isSupabaseConnected={isSupabaseConnected}
       />
@@ -1237,46 +1358,26 @@ export default function App() {
         className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-24 sm:pb-28 px-2 sm:px-4"
       >
         <div className="w-full max-w-[490px] sm:w-[490px] mx-auto flex flex-col items-stretch space-y-2">
-          {/* Quick Jump to Today's Homework Button */}
-          {monthEntries.length > 0 && (
-            <div className="flex justify-center w-full px-2 pt-0.5">
-              <button
-                id="jump-to-today-homework-btn"
-                type="button"
-                onClick={handleScrollToTodayHomework}
-                className="group flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 bg-gradient-to-r from-[#0E5C56] to-[#127068] hover:from-[#0B4A45] hover:to-[#0E5C56] text-[#F5EFDD] rounded-full text-xs sm:text-sm font-bold shadow-sm hover:shadow-md active:scale-95 transition-all cursor-pointer border border-[#B8860B]/30"
-                title="Jump to current active homework"
-              >
-                <span className="font-sans font-bold tracking-tight">
-                  Jump to Today&apos;s Homework
-                </span>
-                <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E5C378] group-hover:translate-y-0.5 transition-transform stroke-[2.5]" />
-              </button>
-            </div>
-          )}
-
-          {/* Month Navigator Bar */}
-          <MonthNavigator
-            isCurrent={isCurrentMonth}
-            monthLabel={selectedMonthLabel}
-            onPrevMonth={handlePrevMonth}
-            onNextMonth={handleNextMonth}
-            onGoToCurrentMonth={handleGoToCurrentMonth}
-            entries={monthEntries}
-            activeEntryId={currentActiveEntryId}
-            onSelectEntry={handleSelectEntryFromNav}
+          {/* New Student Top Section (Header card with current reading + Two action buttons) */}
+          <StudentTopSection
+            student={activeStudent}
+            visibleMonthLabel={visibleMonthLabel}
+            onOpenSummary={() => setSelectedSurahStudent(activeStudent)}
+            onOpenNotes={() => setIsFocusNotesModalOpen(true)}
+            onViewTodayHomework={handleViewTodayHomework}
+            onOpenMonthPicker={() => setIsMonthPickerOpen(true)}
           />
 
-          {/* List of Homework Entries for the selected month */}
+          {/* List of Homework Entries for the selected month only */}
           <div id="homework-list" className="space-y-1.5 pt-0.5">
-            {monthEntries.length === 0 ? (
+            {displayedEntries.length === 0 ? (
               <div
-                id="empty-month-state"
+                id="empty-homework-state"
                 className="rounded-2xl border border-dashed border-[#B8860B]/25 bg-white p-5 text-center shadow-2xs"
               >
                 <BookOpen className="w-7 h-7 mx-auto text-[#B8860B]/60 mb-1.5" />
                 <h3 className="font-sans font-bold text-xs sm:text-sm text-[#0E5C56]">
-                  No homework entries found for {selectedMonthLabel}
+                  No homework entries found for {visibleMonthLabel}
                 </h3>
                 {activeStudent && activeStudent.entries && activeStudent.entries.length > 0 && (
                   <div className="mt-2.5">
@@ -1285,11 +1386,10 @@ export default function App() {
                     </p>
                     <button
                       type="button"
-                      onClick={handleScrollToTodayHomework}
+                      onClick={handleViewTodayHomework}
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0E5C56] text-[#F5EFDD] text-xs font-bold hover:bg-[#0B4A45] active:scale-95 transition-all cursor-pointer shadow-xs"
                     >
-                      <span>Jump to latest active month</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <span>Jump to current month</span>
                     </button>
                   </div>
                 )}
@@ -1304,17 +1404,14 @@ export default function App() {
                   )
                 );
 
-                return monthEntries.map((entry, idx) => {
+                return displayedEntries.map((entry, idx) => {
                   // Calculate week bounds for this entry
                   const weekBounds = getWeekBounds(parseLocalDate(entry.date));
                   const weekEndThursday = weekBounds.endStr;
                   const nextSaturdayStr = addDays(weekEndThursday, 2);
 
-                  const weekEndMonthPrefix = weekEndThursday.slice(0, 7);
-                  const isWeekEndingInCurrentMonth = weekEndMonthPrefix === selectedMonthPrefix;
-
-                  const nextEntry = monthEntries[idx + 1];
-                  const isLastEntryOfWeekInMonth =
+                  const nextEntry = displayedEntries[idx + 1];
+                  const isLastEntryOfWeek =
                     !nextEntry ||
                     getWeekBounds(parseLocalDate(nextEntry.date)).endStr !== weekEndThursday;
 
@@ -1322,13 +1419,10 @@ export default function App() {
                     activeStudent?.entries?.some((e) => e.date >= nextSaturdayStr)
                   );
 
-                  // Show star band at the end of each week in the month:
-                  // either when followed by subsequent week entries, OR if it is the latest entry of the current active week!
-                  const isLatestEntryOverall = idx === monthEntries.length - 1;
-                  const shouldShowStarBand =
-                    isWeekEndingInCurrentMonth &&
-                    isLastEntryOfWeekInMonth &&
-                    (hasSubsequentSaturdayEntry || isLatestEntryOverall);
+                  // Show star band at the end of a week ONLY after the next week has started
+                  // (i.e. only if an entry exists on Saturday or later of the following week).
+                  // If no card is placed on Saturday or after, this evaluation does not appear.
+                  const shouldShowStarBand = isLastEntryOfWeek && hasSubsequentSaturdayEntry;
 
                   const weekRating =
                     shouldShowStarBand && activeStudent
@@ -1347,12 +1441,13 @@ export default function App() {
                       className="w-full"
                     >
                       <HomeworkRow
-                        key={`month-entry-${entry.id}`}
+                        key={`entry-row-item-${entry.id}`}
                         entry={entry}
-                        isTeacherMode={isTeacherMode}
+                        isTeacherMode={canEditCurrentFamily}
                         isMostRecentUngraded={entry.id === mostRecentUngradedEntryId}
                         isSingleMostRecentInView={entry.id === singleMostRecentInViewId}
-                        selectedMonthPrefix={selectedMonthPrefix}
+                        isHighlighted={entry.id === highlightedEntryId}
+                        selectedMonthPrefix={visibleMonthPrefix}
                         studentSurahRatings={activeStudent?.surahRatings}
                         showOnTime={isYusuf}
                         onOpenStudentNotes={() => setIsFocusNotesModalOpen(true)}
@@ -1373,13 +1468,13 @@ export default function App() {
                             m.weekEndDate === addDays(weekEndThursday, 1)
                         );
 
-                        // Dynamically select a preset message from the matching star tier (Req 2)
+                        // Dynamically select a preset message from the matching star tier
                         const defaultDynamicTitle = getDefaultMotivationalTitle(
                           weekRating.stars,
                           `${activeStudent.id}-${weekEndThursday}`
                         );
 
-                        // Preserves custom title if teacher edited or set one (Req 4)
+                        // Preserves custom title if teacher edited or set one
                         const displayWeekTitle =
                           manualWeekConfig?.title && manualWeekConfig.title.trim().length > 0
                             ? manualWeekConfig.title
@@ -1396,7 +1491,7 @@ export default function App() {
                             idPrefix={`week-stars-${weekEndThursday}`}
                             title={displayWeekTitle}
                             subtitle={displayWeekSubtitle}
-                            isTeacherMode={isTeacherMode}
+                            isTeacherMode={canEditCurrentFamily}
                             isPastWeek={!isCurrent}
                             onSaveWeeklySettings={(settings) => {
                               handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, settings);
@@ -1418,8 +1513,8 @@ export default function App() {
               })()
             )}
 
-            {/* Teacher Mode: Single "Repeat +" Button & Voice AI Button */}
-            {isTeacherMode && (
+            {/* Teacher / Parent Edit Mode: Single "Repeat +" Button & Voice AI Button */}
+            {canEditCurrentFamily && (
               <AddHomeworkRow
                 lastEntry={mostRecentStudentEntry}
                 onRepeatLastEntry={handleRepeatLastHomework}
@@ -1433,11 +1528,22 @@ export default function App() {
         </div>
       </main>
 
+      {/* Month Selection Bottom Sheet */}
+      <MonthPickerBottomSheet
+        isOpen={isMonthPickerOpen}
+        onClose={() => setIsMonthPickerOpen(false)}
+        currentYear={visibleYearMonth.year}
+        currentMonth={visibleYearMonth.month}
+        entries={activeStudent?.entries || []}
+        onSelectMonth={handleSelectMonthFromPicker}
+      />
+
       {/* Fixed Compact Bottom Student Switcher */}
       <StudentSwitcher
         students={visibleStudents}
         activeStudentId={activeStudentId}
         onSelectStudent={setActiveStudentId}
+        onDoubleTapStudent={handleDoubleTapStudent}
       />
 
       {/* Slide-out Sidebar Drawer dedicated to Current Student */}
@@ -1447,7 +1553,7 @@ export default function App() {
         student={activeStudent}
         familyName={activeFamily?.name}
         familyId={activeFamily?.id}
-        isTeacherMode={isTeacherMode}
+        isTeacherMode={canEditCurrentFamily}
         onUpdateStudentTilawa={handleUpdateStudentTilawa}
         onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
         onOpenSurahProgress={(st) => setSelectedSurahStudent(st)}
@@ -1478,7 +1584,7 @@ export default function App() {
           isOpen={isFocusNotesModalOpen}
           onClose={() => setIsFocusNotesModalOpen(false)}
           student={activeStudent}
-          isTeacherMode={isTeacherMode}
+          isTeacherMode={canEditCurrentFamily}
           onSaveFocusNotes={handleSaveFocusNotes}
         />
       )}
@@ -1491,14 +1597,14 @@ export default function App() {
           student={settingsStudent}
           familyName={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.name || activeFamily?.name}
           familyId={data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id || activeFamily?.id}
-          isTeacherMode={isTeacherMode}
+          isTeacherMode={canEdit(authState, data.families.find((f) => f.studentIds.includes(settingsStudent.id))?.id || activeFamily?.id)}
           onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
           onUpdateStudentPhoto={handleUpdateStudentPhoto}
           onUpdateStudentShareToken={handleSaveStudentShareToken}
         />
       )}
 
-      {/* Student Attendance Settings Modal (Teacher Mode) */}
+      {/* Student Attendance Settings Modal (Teacher / Parent Mode) */}
       {activeFamily && (
         <StudentAttendanceModal
           isOpen={isFamilyAttendanceOpen}
@@ -1520,7 +1626,10 @@ export default function App() {
           isOpen={Boolean(selectedSurahStudent)}
           onClose={() => setSelectedSurahStudent(null)}
           student={data.students.find((s) => s.id === selectedSurahStudent.id) || selectedSurahStudent}
-          isTeacherMode={isTeacherMode}
+          isTeacherMode={canEdit(
+            authState,
+            data.families.find((f) => f.studentIds.includes(selectedSurahStudent.id))?.id || activeFamily?.id
+          )}
           onUpdateSurahStatus={(surahNumber, status) => {
             handleModalUpdateSurahStatus(selectedSurahStudent.id, surahNumber, status);
             // Also keep local state updated

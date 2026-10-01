@@ -1,47 +1,47 @@
-import React, { useState } from 'react';
-import { Family, Student } from '../types';
+import React, { useState, useEffect } from 'react';
+import { AuthState, Family, Student } from '../types';
 import {
-  Check,
   Shield,
   KeyRound,
   Lock,
-  Camera,
   CloudUpload,
   Loader2,
-  AlertTriangle,
   Eye,
   EyeOff,
   ArrowUp,
   ArrowDown,
+  Check,
 } from 'lucide-react';
-import { verifyTeacherPassword } from '../utils/authUtils';
+import { authenticateWithPassword, hashPassword } from '../utils/authUtils';
 
 interface MainPortalProps {
   families: Family[];
   students: Student[];
   onSelectFamilyAndStudent: (familyId: string, studentId?: string) => void;
-  isTeacherAuthenticated: boolean;
-  onTeacherLoginSuccess: () => void;
-  onTeacherLogout: () => void;
+  authState: AuthState;
+  onLoginSuccess: (auth: AuthState) => void;
+  onLogout: () => void;
   isTeacherMode: boolean;
   onToggleTeacherMode: () => void;
   onOpenStudentSettings?: (student: Student) => void;
   onSyncToSupabase?: () => Promise<{ success: boolean; entriesCount: number; message: string }>;
   onUpdateFamilyOrder?: (updatedFamilies: Family[]) => void;
+  onUpdateFamilyParentPassword?: (familyId: string, passwordHash?: string) => void;
 }
 
 export const MainPortal: React.FC<MainPortalProps> = ({
   families,
   students,
   onSelectFamilyAndStudent,
-  isTeacherAuthenticated,
-  onTeacherLoginSuccess,
-  onTeacherLogout,
+  authState,
+  onLoginSuccess,
+  onLogout,
   isTeacherMode,
   onToggleTeacherMode,
   onOpenStudentSettings,
   onSyncToSupabase,
   onUpdateFamilyOrder,
+  onUpdateFamilyParentPassword,
 }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -52,6 +52,40 @@ export const MainPortal: React.FC<MainPortalProps> = ({
   // Confirmations
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+
+  // Parent Password Settings Modal (Teacher only)
+  const [familyForPasswordModal, setFamilyForPasswordModal] = useState<Family | null>(null);
+  const [newParentPassword, setNewParentPassword] = useState('');
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState('');
+
+  // Auto-redirect if role is parent: parents should not view the multi-family list
+  useEffect(() => {
+    if (authState.role === 'parent' && authState.scopedFamilyId) {
+      const myFamily = families.find((f) => f.id === authState.scopedFamilyId);
+      if (myFamily && myFamily.studentIds.length > 0) {
+        onSelectFamilyAndStudent(myFamily.id, myFamily.studentIds[0]);
+      }
+    }
+  }, [authState.role, authState.scopedFamilyId, families, onSelectFamilyAndStudent]);
+
+  if (authState.role === 'parent') {
+    const myFam = families.find((f) => f.id === authState.scopedFamilyId);
+    return (
+      <div className="min-h-screen bg-[#F5EFDD] flex flex-col items-center justify-center p-6 text-center" dir="ltr">
+        <Shield className="w-12 h-12 text-[#0E5C56] mb-3 animate-pulse" />
+        <h2 className="text-lg font-bold text-[#0E5C56]">Redirecting to Family View...</h2>
+        <p className="text-xs text-[#5B6478] mt-1 font-serif">حساب ولي الأمر مرتبط بعائلة {myFam?.name || ''}</p>
+        <button
+          onClick={() => {
+            if (myFam && myFam.studentIds[0]) onSelectFamilyAndStudent(myFam.id, myFam.studentIds[0]);
+          }}
+          className="mt-4 px-5 py-2 bg-[#0E5C56] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+        >
+          Open Family
+        </button>
+      </div>
+    );
+  }
 
   const executeManualSync = async () => {
     if (!onSyncToSupabase || isSyncing) return;
@@ -70,16 +104,51 @@ export const MainPortal: React.FC<MainPortalProps> = ({
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (verifyTeacherPassword(passwordInput)) {
+    if (!passwordInput.trim()) return;
+
+    const resolvedAuth = await authenticateWithPassword(passwordInput, families);
+    if (resolvedAuth) {
       setShowLoginModal(false);
       setPasswordInput('');
       setErrorMsg('');
-      onTeacherLoginSuccess();
+      onLoginSuccess(resolvedAuth);
     } else {
-      setErrorMsg('Incorrect password');
+      setErrorMsg('كلمة المرور غير صحيحة (Incorrect password)');
     }
+  };
+
+  const handleSaveParentPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!familyForPasswordModal || !onUpdateFamilyParentPassword) return;
+
+    if (!newParentPassword.trim()) {
+      // Remove password
+      onUpdateFamilyParentPassword(familyForPasswordModal.id, undefined);
+      setPasswordSuccessMsg('Parent password removed');
+    } else {
+      const hashed = await hashPassword(newParentPassword.trim());
+      onUpdateFamilyParentPassword(familyForPasswordModal.id, hashed);
+      setPasswordSuccessMsg('Parent password saved successfully');
+    }
+
+    setTimeout(() => {
+      setPasswordSuccessMsg('');
+      setFamilyForPasswordModal(null);
+      setNewParentPassword('');
+    }, 1200);
+  };
+
+  const handleRemoveParentPassword = () => {
+    if (!familyForPasswordModal || !onUpdateFamilyParentPassword) return;
+    onUpdateFamilyParentPassword(familyForPasswordModal.id, undefined);
+    setPasswordSuccessMsg('Parent password removed');
+    setTimeout(() => {
+      setPasswordSuccessMsg('');
+      setFamilyForPasswordModal(null);
+      setNewParentPassword('');
+    }, 1000);
   };
 
   // Sort families dynamically by displayOrder or default index
@@ -109,9 +178,12 @@ export const MainPortal: React.FC<MainPortalProps> = ({
 
   const toggleHideFamily = (famId: string) => {
     if (!onUpdateFamilyOrder) return;
-    const updated = families.map((f) =>
-      f.id === famId ? { ...f, isHidden: !f.isHidden } : f
-    );
+    const updated = sortedFamilies.map((f) => {
+      if (f.id === famId) {
+        return { ...f, isHidden: !f.isHidden };
+      }
+      return f;
+    });
     onUpdateFamilyOrder(updated);
   };
 
@@ -119,54 +191,32 @@ export const MainPortal: React.FC<MainPortalProps> = ({
     return (
       <div
         key={student.id}
-        id={`portal-student-card-${student.id}`}
+        id={`portal-student-${student.id}`}
         onClick={() => onSelectFamilyAndStudent(familyId, student.id)}
-        className="group relative flex flex-col bg-white rounded-[24px] sm:rounded-[30px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-200 border-2 border-white hover:border-[#B8860B]/60 active:scale-97 cursor-pointer select-none"
+        className="group relative flex flex-col bg-white rounded-3xl overflow-hidden border border-[#B8860B]/30 hover:border-[#0E5C56] shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-1 active:scale-98"
       >
-        {/* Top Portrait Photo Container */}
-        <div className="relative w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden bg-gradient-to-b from-[#FAF6EE] to-[#E9DFCA] flex items-center justify-center rounded-t-[22px] sm:rounded-t-[28px]">
+        {/* Photo Container */}
+        <div className="relative w-full aspect-square bg-[#FAF6EE] flex items-center justify-center overflow-hidden">
           {student.photoUrl ? (
             <img
               src={student.photoUrl}
               alt={student.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               style={{
-                objectPosition: student.photoPosition || 'center 20%',
-                transform: student.photoZoom && student.photoZoom !== 1 ? `scale(${student.photoZoom})` : undefined,
+                objectPosition: student.photoPosition || '50% 20%',
+                transform: `scale(${student.photoZoom || 1.0})`,
               }}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
             <div
-              className="w-full h-full flex flex-col items-center justify-center p-3 text-white transition-all group-hover:scale-102"
-              style={{
-                background: `linear-gradient(145deg, ${student.color || '#0E5C56'}e6, ${student.color || '#0E5C56'})`,
-              }}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-bold text-2xl sm:text-3xl text-white shadow-inner"
+              style={{ backgroundColor: student.color }}
             >
-              <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xl sm:text-2xl font-bold font-sans shadow-inner">
-                {student.name.charAt(0)}
-              </div>
-              <span className="text-xs sm:text-sm text-white/95 font-sans font-bold mt-2">
-                {student.name}
-              </span>
+              {student.name.charAt(0)}
             </div>
           )}
 
-          {/* Teacher Mode Fast-Edit Button */}
-          {isTeacherMode && onOpenStudentSettings && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenStudentSettings(student);
-              }}
-              title="Edit photo & settings"
-              className="absolute top-2 left-2 z-10 p-2 rounded-full bg-black/60 hover:bg-[#B8860B] text-white shadow-md backdrop-blur-xs transition-all cursor-pointer"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Subtle Corner Badge for Tilawa Bookmarking */}
+          {/* Current Tilawa Surah & Ayah Badge */}
           {student.tilawaSurah && (
             <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-xs text-[#F1E7CE] px-2 py-0.5 rounded-full text-[10px] font-sans font-bold flex items-center gap-1 shadow-xs border border-white/20">
               <span>{student.tilawaSurah}:{student.tilawaAyah || 1}</span>
@@ -210,7 +260,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
 
           {/* Teacher Mode & Sync Controls */}
           <div className="flex items-center gap-2">
-            {isTeacherAuthenticated ? (
+            {authState.role === 'teacher' ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 {onSyncToSupabase && (
                   <button
@@ -285,13 +335,36 @@ export const MainPortal: React.FC<MainPortalProps> = ({
 
           return (
             <div key={fam.id} id={`portal-family-row-${fam.id}`} className="w-full space-y-2">
-              {/* Teacher order/visibility controls in teacher mode */}
+              {/* Teacher order/visibility controls & Parent password setup in teacher mode */}
               {isTeacherMode && onUpdateFamilyOrder && (
-                <div className="flex items-center justify-between bg-black/5 px-3 py-1 rounded-xl text-xs text-[#5B6478]">
+                <div className="flex items-center justify-between bg-black/5 px-3 py-1.5 rounded-xl text-xs text-[#5B6478]">
                   <span className="font-bold text-[#0E5C56]">
                     {fam.name} {fam.isHidden && '(Hidden from students)'}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
+                    {/* Set/Manage Parent Password Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFamilyForPasswordModal(fam);
+                        setNewParentPassword('');
+                        setPasswordSuccessMsg('');
+                      }}
+                      className={`px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs ${
+                        fam.parentPasswordHash
+                          ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
+                          : 'bg-white text-[#5B6478] hover:bg-gray-100 border border-gray-300'
+                      }`}
+                      title={
+                        fam.parentPasswordHash
+                          ? 'Parent password set (Click to change/remove)'
+                          : 'Set parent password for this family'
+                      }
+                    >
+                      <KeyRound className="w-3 h-3 text-[#B8860B]" />
+                      <span>{fam.parentPasswordHash ? 'Parent Pass ✓' : 'Set Parent Pass'}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => moveFamily(fam.id, 'up')}
@@ -349,29 +422,56 @@ export const MainPortal: React.FC<MainPortalProps> = ({
         })}
       </main>
 
-      {/* Footer */}
-      <footer className="py-3 border-t border-[#B8860B]/20 bg-[#FBF6E8]/60 text-center text-xs text-[#5B6478]">
-        Quran Homework Tracker · Daily Memorization & Recitation
+      {/* Footer / Instructions */}
+      <footer className="text-center py-4 text-xs text-[#5B6478] bg-transparent">
+        Click any student to open their homework log and memorization schedule
       </footer>
 
-      {/* Confirm Teacher Logout Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-[#FAF6EE] text-[#1F2A3D] border border-[#B8860B]/40 rounded-2xl p-5 sm:p-6 w-full max-w-sm shadow-2xl space-y-4">
-            <div className="flex items-center gap-2.5 text-[#0E5C56]">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700">
-                <AlertTriangle className="w-5 h-5 text-[#B8860B]" />
-              </div>
-              <h3 className="text-base font-bold font-sans">Lock Teacher Mode</h3>
-            </div>
-            <p className="text-xs sm:text-sm text-[#5B6478] leading-relaxed">
-              Are you sure you want to lock teacher mode and log out? You will need your password to re-enter.
+      {/* Confirmation Modal for Cloud Sync */}
+      {showSyncConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <h3 className="font-sans font-bold text-base text-[#0E5C56]">
+              Upload Local Data to Cloud?
+            </h3>
+            <p className="text-xs text-[#5B6478] leading-relaxed">
+              This will overwrite all cloud data with your current local families, students, and homework entries.
             </p>
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSyncConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeManualSync}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0E5C56] text-white hover:bg-[#0B4D48] cursor-pointer shadow-xs"
+              >
+                Upload Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Teacher Logout */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <h3 className="font-sans font-bold text-base text-[#0E5C56]">
+              Lock Teacher Access?
+            </h3>
+            <p className="text-xs text-[#5B6478] leading-relaxed">
+              Are you sure you want to log out of teacher mode on this device?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 cursor-pointer"
               >
                 Cancel
               </button>
@@ -379,63 +479,26 @@ export const MainPortal: React.FC<MainPortalProps> = ({
                 type="button"
                 onClick={() => {
                   setShowLogoutConfirm(false);
-                  onTeacherLogout();
+                  onLogout();
                 }}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer shadow-xs"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 text-white hover:bg-red-700 cursor-pointer shadow-xs"
               >
-                Confirm Logout
+                Log Out
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirm Manual Cloud Sync Modal */}
-      {showSyncConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-[#FAF6EE] text-[#1F2A3D] border border-[#B8860B]/40 rounded-2xl p-5 sm:p-6 w-full max-w-sm shadow-2xl space-y-4">
-            <div className="flex items-center gap-2.5 text-[#0E5C56]">
-              <div className="w-9 h-9 rounded-xl bg-[#0E5C56]/15 border border-[#0E5C56]/30 flex items-center justify-center text-[#0E5C56]">
-                <CloudUpload className="w-5 h-5 text-[#0E5C56]" />
-              </div>
-              <h3 className="text-base font-bold font-sans">Save Data to Cloud</h3>
-            </div>
-            <p className="text-xs sm:text-sm text-[#5B6478] leading-relaxed">
-              This will upload and sync all homework records, grades, and settings to the Supabase cloud database. Continue?
-            </p>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowSyncConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeManualSync}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-[#0E5C56] hover:bg-[#0A423E] text-white transition-colors cursor-pointer shadow-xs"
-              >
-                Confirm Sync
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Teacher Login Modal */}
+      {/* Teacher / Parent Login Modal */}
       {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-[#FAF6EE] text-[#1F2A3D] border border-[#B8860B]/40 rounded-2xl p-5 sm:p-6 w-full max-w-sm shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4">
+          <div className="bg-[#FAF6EE] rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#B8860B]/30 space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-[#0E5C56] text-[#F1E7CE] flex items-center justify-center">
-                  <KeyRound className="w-4 h-4 text-[#B8860B]" />
-                </div>
-                <h3 className="text-base font-bold text-[#0E5C56] font-sans">
-                  Teacher Login
-                </h3>
-              </div>
+              <h3 className="font-sans font-bold text-base text-[#0E5C56] flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#B8860B]" />
+                Teacher / Parent Login
+              </h3>
               <button
                 type="button"
                 onClick={() => {
@@ -450,7 +513,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
             </div>
 
             <p className="text-xs text-[#5B6478] leading-relaxed">
-              Enter your password to unlock teacher privileges.
+              أدخل كلمة مرور المعلم للوصول الكامل، أو كلمة مرور ولي الأمر للوصول الخاص بعائلتك.
             </p>
 
             <form onSubmit={handleLoginSubmit} className="space-y-3">
@@ -493,6 +556,93 @@ export const MainPortal: React.FC<MainPortalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Set Parent Password Modal (Teacher-only) */}
+      {familyForPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4">
+          <div className="bg-[#FAF6EE] rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#B8860B]/30 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-sans font-bold text-base text-[#0E5C56] flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-[#B8860B]" />
+                  Parent Password
+                </h3>
+                <p className="text-xs text-[#5B6478] font-bold mt-0.5">
+                  {familyForPasswordModal.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFamilyForPasswordModal(null);
+                  setPasswordSuccessMsg('');
+                }}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[#5B6478] leading-relaxed">
+              عيّن كلمة مرور خاصة بولي أمر هذه العائلة لتسمح له بتسجيل التقييمات ومتابعة أبنائه فقط.
+            </p>
+
+            <div className="bg-white/80 p-2.5 rounded-xl border border-gray-200 text-xs">
+              <span className="text-[#5B6478]">الحالة الحالية: </span>
+              {familyForPasswordModal.parentPasswordHash ? (
+                <span className="text-emerald-700 font-bold">كلمة المرور مفعّلة ✓</span>
+              ) : (
+                <span className="text-gray-500 italic">لا توجد كلمة مرور معينة</span>
+              )}
+            </div>
+
+            {passwordSuccessMsg ? (
+              <div className="p-3 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl text-center flex items-center justify-center gap-1.5 animate-in fade-in">
+                <Check className="w-4 h-4" />
+                <span>{passwordSuccessMsg}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveParentPassword} className="space-y-3">
+                <div>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newParentPassword}
+                    onChange={(e) => setNewParentPassword(e.target.value)}
+                    placeholder="Enter new parent password..."
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#B8860B]/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0E5C56] text-center font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  {familyForPasswordModal.parentPasswordHash && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveParentPassword}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setFamilyForPasswordModal(null)}
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#5B6478] hover:bg-black/5 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#0E5C56] hover:bg-[#0B4D48] text-white transition-colors cursor-pointer shadow-xs"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

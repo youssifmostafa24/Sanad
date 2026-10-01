@@ -45,6 +45,13 @@ export interface Student {
   shareToken?: string; // Revocable security token for student direct link
 }
 
+export type UserRole = 'student' | 'parent' | 'teacher';
+
+export interface AuthState {
+  role: UserRole;
+  scopedFamilyId?: string; // set only when role === 'parent'
+}
+
 export interface Family {
   id: string;
   name: string;
@@ -52,6 +59,7 @@ export interface Family {
   attendanceDays?: number[]; // Default attendance days for the family
   displayOrder?: number; // Teacher-controlled display order
   isHidden?: boolean; // Whether family is archived/hidden
+  parentPasswordHash?: string; // SHA-256 hash of parent password for this family
 }
 
 export type TimeRange = 'week' | 'month' | 'year';

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { motion } from 'motion/react';
 import { Student } from '../types';
 
@@ -6,14 +6,33 @@ interface StudentSwitcherProps {
   students: Student[];
   activeStudentId: string;
   onSelectStudent: (studentId: string) => void;
+  onDoubleTapStudent?: (studentId: string) => void;
 }
 
 export const StudentSwitcher: React.FC<StudentSwitcherProps> = ({
   students,
   activeStudentId,
   onSelectStudent,
+  onDoubleTapStudent,
 }) => {
+  const lastTapRef = useRef<{ id: string; time: number }>({ id: '', time: 0 });
+
   if (students.length === 0) return null;
+
+  const handleTabClick = (studentId: string) => {
+    const now = Date.now();
+    const timeDiff = now - lastTapRef.current.time;
+
+    // Detect double-tap on ANY student tab (active or not) within ~320ms:
+    if (lastTapRef.current.id === studentId && timeDiff > 0 && timeDiff <= 320) {
+      lastTapRef.current = { id: '', time: 0 };
+      onDoubleTapStudent?.(studentId);
+    } else {
+      // First / single tap:
+      lastTapRef.current = { id: studentId, time: now };
+      onSelectStudent(studentId);
+    }
+  };
 
   return (
     <footer
@@ -39,7 +58,7 @@ export const StudentSwitcher: React.FC<StudentSwitcherProps> = ({
                 role="tab"
                 type="button"
                 aria-selected={isActive}
-                onClick={() => onSelectStudent(student.id)}
+                onClick={() => handleTabClick(student.id)}
                 className="relative px-5 sm:px-6 py-1.5 sm:py-2 rounded-full cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-[#0E5C56]/50 flex items-center justify-center shrink-0 transition-transform active:scale-95"
               >
                 {/* Smooth horizontal moving capsule indicator */}

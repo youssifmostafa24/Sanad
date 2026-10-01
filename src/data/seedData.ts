@@ -41,6 +41,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
       name: 'Ibrahim',
       arabicName: 'إبراهيم',
       color: '#0E5C56', // deep teal
+      photoUrl: '/student_default.jpg',
       attendanceDays: [1, 5], // Monday & Friday
       tilawaSurah: 18, // Al-Kahf
       tilawaAyah: 45,
@@ -133,12 +134,14 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
     },
     {
       id: 'student-sulayman',
-      name: 'Sulaymn',
+      name: 'Sulayman',
       arabicName: 'سليمان',
       color: '#B8860B', // gold
+      photoUrl: '/student_default.jpg',
       attendanceDays: [6, 1, 3], // Saturday, Monday, Wednesday
-      tilawaSurah: 19, // Maryam
-      tilawaAyah: 20,
+      tilawaSurah: 33, // Al-Ahzab
+      tilawaAyah: 54,
+      memorizationFocus: 'التركيز على أحكام المد والترتيل في سورة الأحزاب',
       entries: [
         {
           id: 'sul-entry-1',

@@ -112,9 +112,7 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
         aria-expanded={isOpen}
       >
         <span
-          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center shadow-2xs transition-transform hover:scale-115 active:scale-95 ${
-            isTeacherMode ? 'ring-1.5 ring-[#B8860B]/70 ring-offset-1' : ''
-          }`}
+          className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95 shadow-2xs"
           style={{ backgroundColor: currentMeta.bgColor }}
         />
       </button>
@@ -150,13 +148,13 @@ export const SurahStatusDot: React.FC<SurahStatusDotProps> = ({
                     setIsOpen(false);
                   }}
                   style={{ backgroundColor: opt.bgColor }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-white text-xs font-bold transition-all active:scale-95 shadow-2xs hover:brightness-110 ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[#1F2A3D] text-xs font-bold transition-all active:scale-95 shadow-2xs hover:brightness-105 border border-black/5 ${
                     isSelected ? 'ring-2 ring-[#0E5C56] ring-offset-1' : 'opacity-95 hover:opacity-100'
                   } ${isTeacherMode ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <span className="font-sans font-bold">{opt.shortLabel}</span>
+                  <span className="font-sans font-bold text-[#1F2A3D] text-sm tracking-tight">{opt.shortLabel}</span>
                   {isSelected ? (
-                    <Check className="w-4 h-4 text-white stroke-[3] shrink-0" />
+                    <Check className="w-4 h-4 text-[#1F2A3D] stroke-[3] shrink-0" />
                   ) : (
                     <span className="w-4 h-4 shrink-0" />
                   )}
