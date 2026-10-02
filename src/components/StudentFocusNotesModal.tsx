@@ -372,26 +372,6 @@ export const StudentFocusNotesModal: React.FC<StudentFocusNotesModalProps> = ({
                       className="w-full bg-[#FAF6EE]/80 border border-[#B8860B]/30 rounded-xl p-3 text-xs sm:text-sm text-[#1F2A3D] placeholder-[#8A94A6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0E5C56] transition-all resize-y leading-relaxed font-sans"
                     />
                   </div>
-
-                  {/* Quick Shortcut Tags */}
-                  <div className="space-y-1.5 pt-1">
-                    <span className="text-[11px] font-bold text-[#5B6478] block">
-                      Quick suggestions (click to add):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {QUICK_FOCUS_TAGS.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => handleAddTag(tag)}
-                          className="text-[11px] px-2.5 py-1 rounded-lg bg-[#FAF6EE] hover:bg-[#F3EAD3] text-[#0E5C56] border border-[#B8860B]/30 font-medium transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-                        >
-                          <Sparkles className="w-3 h-3 text-[#B8860B]" />
-                          <span>{tag}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               ) : (
                 /* Student Mode: Read-Only View matching screenshot with rounded sand cards */

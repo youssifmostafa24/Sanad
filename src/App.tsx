@@ -18,15 +18,15 @@ import { AddHomeworkRow } from './components/AddHomeworkRow';
 import { WeeklyStarBand } from './components/WeeklyStarBand';
 import { StudentSwitcher } from './components/StudentSwitcher';
 import { StudentSidebarDrawer } from './components/StudentSidebarDrawer';
-import { StudentTopSection } from './components/StudentTopSection';
+import { StudentTopNavPills, StudentReadingCard, StudentTopNavTab } from './components/StudentTopSection';
+import { StudentMemorizationSummaryView } from './components/StudentMemorizationSummaryView';
+import { StudentFocusNotesView } from './components/StudentFocusNotesView';
 import { MonthPickerBottomSheet } from './components/MonthPickerBottomSheet';
 import { MainPortal } from './components/MainPortal';
 import { StudentAttendanceModal } from './components/StudentAttendanceModal';
 import { SurahProgressModal } from './components/SurahProgressModal';
 import { StudentSettingsModal } from './components/StudentSettingsModal';
-import { StudentFocusNotesModal } from './components/StudentFocusNotesModal';
 import { VoiceHomeworkModal } from './components/VoiceHomeworkModal';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { getStoredAuthState, setStoredAuthState } from './utils/authUtils';
 import { canEdit } from './utils/permissions';
 import { normalizeQuranHomeworkText } from './data/quranSurahs';
@@ -334,9 +334,6 @@ export default function App() {
   // Slide-out sidebar drawer state for student pages navigation
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-  // Student Memorization Focus & Recitation Notes Modal State
-  const [isFocusNotesModalOpen, setIsFocusNotesModalOpen] = useState<boolean>(false);
-
   // Smart Voice Dictation Modal State
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
 
@@ -515,47 +512,25 @@ export default function App() {
 
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<StudentTopNavTab>('homework');
+  const [isScrolling, setIsScrolling] = useState<boolean>(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Displays ONLY entries for the currently selected month
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Displays a continuous list across months, deduplicated and sorted chronologically
   const displayedEntries = useMemo(() => {
-    if (!activeStudent?.entries) return [];
-
-    const selectedPrefix = `${visibleYearMonth.year}-${String(visibleYearMonth.month).padStart(2, '0')}`;
-    const nextMonthYear = visibleYearMonth.month === 12 ? visibleYearMonth.year + 1 : visibleYearMonth.year;
-    const nextMonthNum = visibleYearMonth.month === 12 ? 1 : visibleYearMonth.month + 1;
-    const nextMonthPrefix = `${nextMonthYear}-${String(nextMonthNum).padStart(2, '0')}`;
-    const nextMonthStartStr = `${nextMonthPrefix}-01`;
-    const todayStr = formatLocalDate(new Date());
-    const nextMonthHasStarted = todayStr >= nextMonthStartStr;
-
-    const filtered = activeStudent.entries.filter((e) => {
-      const weekBounds = getWeekBounds(parseLocalDate(e.date));
-      const weekEndMonthPrefix = weekBounds.endStr.slice(0, 7);
-
-      // 1. If the week concludes (on Thursday) in this selected month, all days of this week
-      // (including those starting in the previous month) belong to this month's view!
-      if (weekEndMonthPrefix === selectedPrefix) {
-        return true;
-      }
-
-      // 2. If the entry's calendar date is in this selected month, but its week concludes in the next month:
-      // - If the next month has NOT started yet, keep it in the current view so ongoing sessions can be graded.
-      // - Once the next month starts, that week is transferred to the new month.
-      if (e.date.startsWith(selectedPrefix) && !nextMonthHasStarted) {
-        return true;
-      }
-
-      return false;
-    });
-
-    const candidateEntries =
-      filtered.length > 0
-        ? filtered
-        : activeStudent.entries.filter((e) => e.date.startsWith(selectedPrefix));
+    if (!activeStudent?.entries || activeStudent.entries.length === 0) return [];
 
     // Deduplicate strictly by date: Ensure only ONE entry ever appears for the same calendar date
     const uniqueEntriesByDate = new Map<string, Entry>();
-    candidateEntries.forEach((e) => {
+    activeStudent.entries.forEach((e) => {
       if (!uniqueEntriesByDate.has(e.date)) {
         uniqueEntriesByDate.set(e.date, e);
       } else {
@@ -571,7 +546,42 @@ export default function App() {
     });
 
     return Array.from(uniqueEntriesByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [activeStudent?.entries, visibleYearMonth]);
+  }, [activeStudent?.entries]);
+
+  // Today entry and tracking if today's card is currently visible in viewport
+  const todayStr = useMemo(() => formatLocalDate(new Date()), []);
+  const todayEntry = useMemo(() => {
+    if (!activeStudent?.entries) return null;
+    return activeStudent.entries.find((e) => e.date === todayStr) || null;
+  }, [activeStudent?.entries, todayStr]);
+
+  const [isTodayVisible, setIsTodayVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!todayEntry) {
+      setIsTodayVisible(false);
+      return;
+    }
+    const el = document.getElementById(`entry-row-${todayEntry.id}`);
+    if (!el || !scrollContainerRef.current) {
+      setIsTodayVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        setIsTodayVisible(Boolean(entry && entry.isIntersecting));
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: 0.15,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [todayEntry?.id, displayedEntries.length]);
 
   // Find the single most recent entry that still has ANY ungraded portion
   const mostRecentUngradedEntryId = useMemo(() => {
@@ -604,17 +614,74 @@ export default function App() {
     setVisibleYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
   }, [activeStudentId]);
 
-  // Reset scroll to top whenever the student or the selected month changes
+  // WhatsApp-style: Always open and scroll directly to the latest homework entry (centered in viewport)
+  const scrollToLatestHomework = (smooth = false) => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    if (activeStudent?.entries && activeStudent.entries.length > 0) {
+      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+      const latest = sorted[0];
+      if (latest) {
+        const el = document.getElementById(`entry-row-${latest.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+          return;
+        }
+      }
+    }
+    if (latestHomeworkRef.current) {
+      latestHomeworkRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    } else {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
+  };
+
+  // WhatsApp-style: Whenever the page opens, student changes, or entries load,
+  // ensure the view immediately opens positioned at the latest homework entry (like the latest message in WhatsApp)!
   useEffect(() => {
-    if (currentView !== 'family') return;
+    if (currentView !== 'family' || activeTab !== 'homework') return;
+    if (!activeStudent?.entries || activeStudent.entries.length === 0) return;
+
     if (skipResetScrollToTopRef.current) {
       skipResetScrollToTopRef.current = false;
       return;
     }
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
-    }
-  }, [activeStudentId, visibleYearMonth.year, visibleYearMonth.month, currentView]);
+
+    const snapToLatest = () => {
+      if (activeStudent.entries && activeStudent.entries.length > 0) {
+        const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+        const latest = sorted[0];
+        if (latest) {
+          const el = document.getElementById(`entry-row-${latest.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'auto', block: 'center' });
+            return;
+          }
+        }
+      }
+      if (latestHomeworkRef.current) {
+        latestHomeworkRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
+      } else if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    };
+
+    snapToLatest();
+    const f1 = requestAnimationFrame(snapToLatest);
+    const t1 = setTimeout(snapToLatest, 30);
+    const t2 = setTimeout(snapToLatest, 100);
+    const t3 = setTimeout(snapToLatest, 250);
+
+    return () => {
+      cancelAnimationFrame(f1);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [activeStudentId, activeTab, currentView, displayedEntries.length]);
 
   // Ensure the view stays scrolled to the true bottom when a new entry is added
   useEffect(() => {
@@ -652,48 +719,48 @@ export default function App() {
     }
   };
 
-  // View today's homework: ensures current month is active, then smoothly scrolls to today's entry and highlights it
+  // View today's homework: smoothly scrolls to today's entry (or closest) and highlights it
   const handleViewTodayHomework = () => {
     if (!activeStudent || !activeStudent.entries || activeStudent.entries.length === 0) return;
     const today = new Date();
-    const todayStr = formatLocalDate(today);
-    const todayYear = today.getFullYear();
-    const todayMonth = today.getMonth() + 1;
+    const todayDateStr = formatLocalDate(today);
 
-    // Automatically switch to current month if viewing another month
-    if (visibleYearMonth.year !== todayYear || visibleYearMonth.month !== todayMonth) {
-      setVisibleYearMonth({ year: todayYear, month: todayMonth });
+    let target = activeStudent.entries.find((e) => e.date === todayDateStr);
+    if (!target) {
+      const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+      target = sorted[0];
     }
 
-    setTimeout(() => {
-      let target = activeStudent.entries.find((e) => e.date === todayStr);
-      if (!target) {
-        const prefix = `${todayYear}-${String(todayMonth).padStart(2, '0')}`;
-        const currentEntries = activeStudent.entries
-          .filter((e) => e.date.startsWith(prefix))
-          .sort((a, b) => b.date.localeCompare(a.date));
-        target = currentEntries[0] || [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (target) {
+      const el = document.getElementById(`entry-row-${target.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedEntryId(target.id);
+        setTimeout(() => {
+          setHighlightedEntryId((prev) => (prev === target.id ? null : prev));
+        }, 1800);
       }
-
-      if (target) {
-        const el = document.getElementById(`entry-row-${target.id}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          setHighlightedEntryId(target.id);
-          setTimeout(() => {
-            setHighlightedEntryId((prev) => (prev === target.id ? null : prev));
-          }, 1800);
-        }
-      }
-    }, 80);
+    }
   };
 
-  // Selecting a month in the bottom sheet displays that selected month only
+  // Selecting a month in the bottom sheet scrolls the list to that month
   const handleSelectMonthFromPicker = (year: number, month: number) => {
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
     setVisibleYearMonth({ year, month });
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
-    }
+    setIsMonthPickerOpen(false);
+
+    setTimeout(() => {
+      const headerEl = document.getElementById(`month-header-${monthKey}`);
+      if (headerEl) {
+        headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        const firstEntry = displayedEntries.find((e) => e.date.startsWith(monthKey));
+        if (firstEntry) {
+          const entryEl = document.getElementById(`entry-row-${firstEntry.id}`);
+          entryEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }, 60);
   };
 
   // When a student switch is triggered by a double-tap, wait for page render then scroll to their latest homework
@@ -706,6 +773,35 @@ export default function App() {
       scrollToStudentLatestHomework();
     }
   }, [activeStudentId, displayedEntries]);
+
+  // Handler for single-tapping student tab in bottom switcher: switches student & immediately centers their latest homework
+  const handleSelectStudent = (studentId: string) => {
+    setActiveStudentId(studentId);
+
+    const targetStudent = data.students.find((s) => s.id === studentId);
+    const scrollAction = () => {
+      if (targetStudent && targetStudent.entries && targetStudent.entries.length > 0) {
+        const sorted = [...targetStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
+        const latest = sorted[0];
+        if (latest) {
+          const el = document.getElementById(`entry-row-${latest.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'auto', block: 'center' });
+            return;
+          }
+        }
+      }
+      if (latestHomeworkRef.current) {
+        latestHomeworkRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
+      }
+    };
+
+    scrollAction();
+    requestAnimationFrame(scrollAction);
+    setTimeout(scrollAction, 40);
+    setTimeout(scrollAction, 120);
+    setTimeout(scrollAction, 280);
+  };
 
   // Handler for double-tapping any student tab in the bottom switcher
   const handleDoubleTapStudent = (studentId: string) => {
@@ -735,9 +831,42 @@ export default function App() {
     }
   };
 
-  // Scroll listener - Header is permanently fixed and visible at all times
+  // Scroll listener: updates visible month label dynamically while scrolling and toggles WhatsApp-style floating date pill
   const handleScroll = () => {
-    // Header stays fixed and never hides on scroll
+    if (!scrollContainerRef.current) return;
+
+    // Trigger WhatsApp-style floating date pill while scrolling
+    setIsScrolling(true);
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 850);
+
+    const container = scrollContainerRef.current;
+    const headers = container.querySelectorAll<HTMLElement>('[data-month-key]');
+    let activeKey = '';
+    headers.forEach((h) => {
+      const rect = h.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      if (rect.top <= containerRect.top + 160) {
+        activeKey = h.getAttribute('data-month-key') || '';
+      }
+    });
+
+    if (!activeKey && headers.length > 0) {
+      activeKey = headers[0].getAttribute('data-month-key') || '';
+    }
+
+    if (activeKey) {
+      const [y, m] = activeKey.split('-');
+      const yearNum = Number(y);
+      const monthNum = Number(m);
+      if (visibleYearMonth.year !== yearNum || visibleYearMonth.month !== monthNum) {
+        setVisibleYearMonth({ year: yearNum, month: monthNum });
+      }
+    }
   };
 
   // Entry mutation handlers
@@ -1350,49 +1479,92 @@ export default function App() {
         isSupabaseConnected={isSupabaseConnected}
       />
 
+      {/* 4-Pill Top Navigation Bar (Fixed directly beneath Header) */}
+      <StudentTopNavPills
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onOpenSummary={() => setActiveTab('summary')}
+        onOpenNotes={() => setActiveTab('focus')}
+        unreadCount={
+          activeStudent?.memorizationFocus
+            ? activeStudent.memorizationFocus.split('\n').filter((l) => l.trim().length > 0).length
+            : 0
+        }
+      />
+
+      {/* WhatsApp-style floating small date pill for current scrolling month (appears while scrolling, fades out when idle) */}
+      <div
+        id="whatsapp-scroll-month-pill"
+        aria-hidden={!isScrolling}
+        className={`pointer-events-none fixed top-[96px] sm:top-[102px] left-1/2 -translate-x-1/2 z-35 transition-all duration-300 ease-out ${
+          isScrolling && activeTab === 'homework'
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-90 -translate-y-1 pointer-events-none'
+        }`}
+      >
+        <div className="px-3.5 py-1 rounded-full bg-[#0E5C56]/90 backdrop-blur-md text-[#F5EFDD] text-[11px] sm:text-xs font-sans font-bold shadow-md border border-[#B8860B]/30 flex items-center justify-center select-none tracking-wide">
+          <span>{visibleMonthLabel}</span>
+        </div>
+      </div>
+
       {/* Main Content Area */}
       <main
         ref={scrollContainerRef}
         onScroll={handleScroll}
         id="main-scroll-view"
-        className="flex-1 w-full overflow-y-auto pt-16 sm:pt-18 pb-24 sm:pb-28 px-2 sm:px-4"
+        className="flex-1 w-full overflow-y-auto pt-1 pb-24 sm:pb-28 px-2 sm:px-4"
       >
-        <div className="w-full max-w-[490px] sm:w-[490px] mx-auto flex flex-col items-stretch space-y-2">
-          {/* New Student Top Section (Header card with current reading + Two action buttons) */}
-          <StudentTopSection
-            student={activeStudent}
-            visibleMonthLabel={visibleMonthLabel}
-            onOpenSummary={() => setSelectedSurahStudent(activeStudent)}
-            onOpenNotes={() => setIsFocusNotesModalOpen(true)}
-            onViewTodayHomework={handleViewTodayHomework}
-            onOpenMonthPicker={() => setIsMonthPickerOpen(true)}
-          />
+        <div
+          className={`w-full mx-auto flex flex-col items-stretch space-y-2 transition-all duration-300 ${
+            activeTab === 'summary' ? 'max-w-7xl' : 'max-w-[490px] sm:w-[490px]'
+          }`}
+        >
+          {/* If Reading Tab is selected, show the Reading Card */}
+          {activeTab === 'reading' && (
+            <StudentReadingCard
+              student={activeStudent}
+              onSelectTab={setActiveTab}
+              isTeacherMode={canEditCurrentFamily}
+              onUpdateStudentTilawa={handleUpdateStudentTilawa}
+            />
+          )}
 
-          {/* List of Homework Entries for the selected month only */}
-          <div id="homework-list" className="space-y-1.5 pt-0.5">
+          {/* If Memorization Summary Tab is selected, show the Full In-Page Summary View */}
+          {activeTab === 'summary' && (
+            <StudentMemorizationSummaryView
+              student={activeStudent}
+              isTeacherMode={canEditCurrentFamily}
+              onUpdateSurahStatus={(surahNumber, status) => {
+                if (activeStudent) {
+                  handleModalUpdateSurahStatus(activeStudent.id, surahNumber, status);
+                }
+              }}
+              onReturnToHomework={() => setActiveTab('homework')}
+            />
+          )}
+
+          {/* If Focus Notes Tab is selected, show the Focus Notes View */}
+          {activeTab === 'focus' && (
+            <StudentFocusNotesView
+              student={activeStudent}
+              onSelectTab={setActiveTab}
+              isTeacherMode={canEditCurrentFamily}
+              onSaveFocusNotes={handleSaveFocusNotes}
+            />
+          )}
+
+          {/* List of Homework Entries across months with sticky month headers (Visible when activeTab === 'homework') */}
+          {activeTab === 'homework' && (
+            <div id="homework-list" className="space-y-1.5 pt-0.5">
             {displayedEntries.length === 0 ? (
               <div
                 id="empty-homework-state"
-                className="rounded-2xl border border-dashed border-[#B8860B]/25 bg-white p-5 text-center shadow-2xs"
+                className="rounded-2xl border border-dashed border-[#B8860B]/25 bg-white p-6 text-center shadow-2xs"
               >
                 <BookOpen className="w-7 h-7 mx-auto text-[#B8860B]/60 mb-1.5" />
                 <h3 className="font-sans font-bold text-xs sm:text-sm text-[#0E5C56]">
-                  No homework entries found for {visibleMonthLabel}
+                  No homework entries recorded yet
                 </h3>
-                {activeStudent && activeStudent.entries && activeStudent.entries.length > 0 && (
-                  <div className="mt-2.5">
-                    <p className="text-xs text-[#5B6478] mb-2 font-sans">
-                      {activeStudent.entries.length} homework entries recorded in other months
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleViewTodayHomework}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0E5C56] text-[#F5EFDD] text-xs font-bold hover:bg-[#0B4A45] active:scale-95 transition-all cursor-pointer shadow-xs"
-                    >
-                      <span>Jump to current month</span>
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               (() => {
@@ -1405,6 +1577,10 @@ export default function App() {
                 );
 
                 return displayedEntries.map((entry, idx) => {
+                  const entryMonthKey = entry.date.slice(0, 7);
+                  const prevEntry = displayedEntries[idx - 1];
+                  const isFirstEntryOfMonth = !prevEntry || !prevEntry.date.startsWith(entryMonthKey);
+
                   // Calculate week bounds for this entry
                   const weekBounds = getWeekBounds(parseLocalDate(entry.date));
                   const weekEndThursday = weekBounds.endStr;
@@ -1435,79 +1611,98 @@ export default function App() {
                       : null;
 
                   return (
-                    <div
-                      key={`entry-group-${entry.id}`}
-                      ref={entry.id === singleMostRecentInViewId ? latestHomeworkRef : undefined}
-                      className="w-full"
-                    >
-                      <HomeworkRow
-                        key={`entry-row-item-${entry.id}`}
-                        entry={entry}
-                        isTeacherMode={canEditCurrentFamily}
-                        isMostRecentUngraded={entry.id === mostRecentUngradedEntryId}
-                        isSingleMostRecentInView={entry.id === singleMostRecentInViewId}
-                        isHighlighted={entry.id === highlightedEntryId}
-                        selectedMonthPrefix={visibleMonthPrefix}
-                        studentSurahRatings={activeStudent?.surahRatings}
-                        showOnTime={isYusuf}
-                        onOpenStudentNotes={() => setIsFocusNotesModalOpen(true)}
-                        onUpdateEntry={handleUpdateEntry}
-                        onDeleteEntry={handleDeleteEntry}
-                        onDuplicateEntry={handleDuplicateEntry}
-                        onUpdateSurahStatus={handleUpdateSurahStatus}
-                      />
-
-                      {/* Weekly Star Band */}
-                      {shouldShowStarBand && weekRating !== null && (() => {
-                        const now = new Date();
-                        const isCurrent = isCurrentStudyWeek(weekEndThursday, now);
-
-                        const manualWeekConfig = activeStudent.manualWeeklyStars?.find(
-                          (m) =>
-                            m.weekEndDate === weekEndThursday ||
-                            m.weekEndDate === addDays(weekEndThursday, 1)
-                        );
-
-                        // Dynamically select a preset message from the matching star tier
-                        const defaultDynamicTitle = getDefaultMotivationalTitle(
-                          weekRating.stars,
-                          `${activeStudent.id}-${weekEndThursday}`
-                        );
-
-                        // Preserves custom title if teacher edited or set one
-                        const displayWeekTitle =
-                          manualWeekConfig?.title && manualWeekConfig.title.trim().length > 0
-                            ? manualWeekConfig.title
-                            : defaultDynamicTitle;
-
-                        const displayWeekSubtitle = manualWeekConfig?.message || activeStudent.motivationalMessage;
-
+                    <React.Fragment key={`entry-frag-${entry.id}`}>
+                      {/* Section Month Divider in the feed between months - ALWAYS visible */}
+                      {isFirstEntryOfMonth && (() => {
+                        const [y, m] = entryMonthKey.split('-');
+                        const d = new Date(Number(y), Number(m) - 1, 1);
+                        const monthHeaderLabel = d
+                          .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                          .toUpperCase();
                         return (
-                          <WeeklyStarBand
-                            key={`week-stars-${weekEndThursday}`}
-                            stars={weekRating.stars}
-                            autoStars={weekRating.autoStars}
-                            isManualOverride={weekRating.isManual}
-                            idPrefix={`week-stars-${weekEndThursday}`}
-                            title={displayWeekTitle}
-                            subtitle={displayWeekSubtitle}
-                            isTeacherMode={canEditCurrentFamily}
-                            isPastWeek={!isCurrent}
-                            onSaveWeeklySettings={(settings) => {
-                              handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, settings);
-                            }}
-                            onUpdateMotivationalMessage={(newMsg, newTitle) => {
-                              handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, {
-                                message: newMsg,
-                                title: newTitle || displayWeekTitle,
-                                manualStars: weekRating.stars,
-                                disableAuto: weekRating.isManual,
-                              });
-                            }}
-                          />
+                          <div
+                            id={`month-header-${entryMonthKey}`}
+                            data-month-key={entryMonthKey}
+                            className="w-full py-1.5 px-3 bg-[#F5EFDD]/95 border border-[#B8860B]/15 text-[#0E5C56] font-sans font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-between my-2 rounded-lg shadow-2xs select-none"
+                          >
+                            <span>{monthHeaderLabel}</span>
+                          </div>
                         );
                       })()}
-                    </div>
+
+                      <div
+                        key={`entry-group-${entry.id}`}
+                        ref={entry.id === singleMostRecentInViewId ? latestHomeworkRef : undefined}
+                        className="w-full"
+                      >
+                        <HomeworkRow
+                          key={`entry-row-item-${entry.id}`}
+                          entry={entry}
+                          isTeacherMode={canEditCurrentFamily}
+                          isMostRecentUngraded={entry.id === mostRecentUngradedEntryId}
+                          isSingleMostRecentInView={entry.id === singleMostRecentInViewId}
+                          isHighlighted={entry.id === highlightedEntryId}
+                          selectedMonthPrefix={visibleMonthPrefix}
+                          studentSurahRatings={activeStudent?.surahRatings}
+                          showOnTime={isYusuf}
+                          onUpdateEntry={handleUpdateEntry}
+                          onDeleteEntry={handleDeleteEntry}
+                          onDuplicateEntry={handleDuplicateEntry}
+                          onUpdateSurahStatus={handleUpdateSurahStatus}
+                        />
+
+                        {/* Weekly Star Band */}
+                        {shouldShowStarBand && weekRating !== null && (() => {
+                          const now = new Date();
+                          const isCurrent = isCurrentStudyWeek(weekEndThursday, now);
+
+                          const manualWeekConfig = activeStudent.manualWeeklyStars?.find(
+                            (m) =>
+                              m.weekEndDate === weekEndThursday ||
+                              m.weekEndDate === addDays(weekEndThursday, 1)
+                          );
+
+                          // Dynamically select a preset message from the matching star tier
+                          const defaultDynamicTitle = getDefaultMotivationalTitle(
+                            weekRating.stars,
+                            `${activeStudent.id}-${weekEndThursday}`
+                          );
+
+                          // Preserves custom title if teacher edited or set one
+                          const displayWeekTitle =
+                            manualWeekConfig?.title && manualWeekConfig.title.trim().length > 0
+                              ? manualWeekConfig.title
+                              : defaultDynamicTitle;
+
+                          const displayWeekSubtitle = manualWeekConfig?.message || activeStudent.motivationalMessage;
+
+                          return (
+                            <WeeklyStarBand
+                              key={`week-stars-${weekEndThursday}`}
+                              stars={weekRating.stars}
+                              autoStars={weekRating.autoStars}
+                              isManualOverride={weekRating.isManual}
+                              idPrefix={`week-stars-${weekEndThursday}`}
+                              title={displayWeekTitle}
+                              subtitle={displayWeekSubtitle}
+                              isTeacherMode={canEditCurrentFamily}
+                              isPastWeek={!isCurrent}
+                              onSaveWeeklySettings={(settings) => {
+                                handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, settings);
+                              }}
+                              onUpdateMotivationalMessage={(newMsg, newTitle) => {
+                                handleSaveWeeklyStarSettings(activeStudent.id, weekEndThursday, {
+                                  message: newMsg,
+                                  title: newTitle || displayWeekTitle,
+                                  manualStars: weekRating.stars,
+                                  disableAuto: weekRating.isManual,
+                                });
+                              }}
+                            />
+                          );
+                        })()}
+                      </div>
+                    </React.Fragment>
                   );
                 });
               })()
@@ -1522,9 +1717,10 @@ export default function App() {
               />
             )}
 
-            {/* Bottom Breathing Room Spacer to guarantee full visibility above bottom switcher */}
-            <div id="homework-list-bottom-spacer" className="h-6 sm:h-8 w-full shrink-0" aria-hidden="true" />
+            {/* Bottom Breathing Room Spacer to guarantee full centering and visibility above bottom switcher */}
+            <div id="homework-list-bottom-spacer" className="h-32 sm:h-44 w-full shrink-0" aria-hidden="true" />
           </div>
+          )}
         </div>
       </main>
 
@@ -1542,7 +1738,7 @@ export default function App() {
       <StudentSwitcher
         students={visibleStudents}
         activeStudentId={activeStudentId}
-        onSelectStudent={setActiveStudentId}
+        onSelectStudent={handleSelectStudent}
         onDoubleTapStudent={handleDoubleTapStudent}
       />
 
@@ -1560,7 +1756,7 @@ export default function App() {
         onOpenPortal={handleOpenPortal}
         onOpenFocusNotes={() => {
           setIsSidebarOpen(false);
-          setIsFocusNotesModalOpen(true);
+          setActiveTab('focus');
         }}
         onOpenStudentSettings={(st) => {
           setIsSidebarOpen(false);
@@ -1575,17 +1771,6 @@ export default function App() {
           onClose={() => setIsVoiceModalOpen(false)}
           student={activeStudent}
           onSaveNewHomework={handleSaveVoiceHomework}
-        />
-      )}
-
-      {/* Student Focus Areas & Recitation Bookmark Modal */}
-      {activeStudent && (
-        <StudentFocusNotesModal
-          isOpen={isFocusNotesModalOpen}
-          onClose={() => setIsFocusNotesModalOpen(false)}
-          student={activeStudent}
-          isTeacherMode={canEditCurrentFamily}
-          onSaveFocusNotes={handleSaveFocusNotes}
         />
       )}
 
@@ -1647,9 +1832,6 @@ export default function App() {
           }}
         />
       )}
-
-      {/* Global Compact Offline & Supabase Status Indicator */}
-      <OfflineIndicator isSupabaseConnected={isSupabaseConnected} />
     </div>
   );
 }

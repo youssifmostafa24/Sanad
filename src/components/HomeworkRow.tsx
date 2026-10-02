@@ -37,7 +37,6 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
   studentSurahRatings,
   showOnTime = false,
   isHighlighted = false,
-  onOpenStudentNotes,
   onUpdateEntry,
   onDeleteEntry,
   onDuplicateEntry,
@@ -202,23 +201,10 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
         )}
       </div>
 
-      {/* Right Card: Day's homework portions - tightened width & reduced max height ceiling (Req 5 & 6) */}
+      {/* Right Card: Day's homework portions */}
       <div
         id={`content-card-${entry.id}`}
-        onClick={(e) => {
-          // If click was on interactive buttons/inputs/pickers, don't open modal
-          const target = e.target as HTMLElement;
-          if (target.closest('button, input, select, textarea, [data-interactive="true"]')) {
-            return;
-          }
-          onOpenStudentNotes?.();
-        }}
-        title={
-          isTeacherMode
-            ? 'Click blank space to edit focus notes & recitation'
-            : 'Click to view memorization focus notes & recitation'
-        }
-        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1 px-2 sm:py-1 sm:px-2.5 flex flex-col justify-center relative transition-all ${cardBorder} hover:shadow-xs cursor-pointer min-h-[68px] sm:min-h-[72px] overflow-hidden`}
+        className={`flex-1 min-w-0 rounded-2xl sm:rounded-3xl py-1 px-2 sm:py-1 sm:px-2.5 flex flex-col justify-center relative transition-all ${cardBorder} min-h-[68px] sm:min-h-[72px] overflow-hidden`}
       >
         {/* Portion 1: Hifz Homework */}
         <div
@@ -258,7 +244,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                       }`}
                       dir={parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
                     >
-                      {parsedHifz.ayahRange}
+                      <span dir="ltr">{parsedHifz.ayahRange}</span>
                     </span>
                   </div>
                 ) : entry.hifzText ? (
@@ -284,7 +270,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                       }`}
                       dir={parsedHifz.isFullSurah || parsedHifz.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
                     >
-                      {parsedHifz.ayahRange}
+                      <span dir="ltr">{parsedHifz.ayahRange}</span>
                     </span>
                   </div>
                 ) : entry.hifzText ? (
@@ -352,7 +338,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                       }`}
                       dir={parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
                     >
-                      {parsedMurajaa.ayahRange}
+                      <span dir="ltr">{parsedMurajaa.ayahRange}</span>
                     </span>
                   </div>
                 ) : cleanMurajaa ? (
@@ -378,7 +364,7 @@ export const HomeworkRow: React.FC<HomeworkRowProps> = ({
                       }`}
                       dir={parsedMurajaa.isFullSurah || parsedMurajaa.ayahRange === 'كاملة' ? 'rtl' : 'ltr'}
                     >
-                      {parsedMurajaa.ayahRange}
+                      <span dir="ltr">{parsedMurajaa.ayahRange}</span>
                     </span>
                   </div>
                 ) : cleanMurajaa ? (

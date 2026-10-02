@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { KeyRound, Menu, Mic, Database, Shield } from 'lucide-react';
+import { Menu, Mic, Database, KeyRound, Shield } from 'lucide-react';
 import { AuthState, Family } from '../types';
 import { authenticateWithPassword } from '../utils/authUtils';
 
@@ -36,9 +36,23 @@ export const Header: React.FC<HeaderProps> = ({
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [showSupabaseTooltip, setShowSupabaseTooltip] = useState(false);
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (showPasswordPrompt) {
@@ -66,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
           onOpenPortal();
         }
       } else {
-        setErrorMsg('كلمة المرور غير صحيحة (Incorrect password)');
+        setErrorMsg('Incorrect password');
         inputRef.current?.select();
       }
     } finally {
@@ -78,17 +92,11 @@ export const Header: React.FC<HeaderProps> = ({
     if (authState.role === 'teacher') {
       onOpenPortal();
     } else if (authState.role === 'parent') {
-      // Parents are strictly scoped to their own family
       return;
     } else {
       setPromptTarget('portal');
       setShowPasswordPrompt(true);
     }
-  };
-
-  const handleLoginClick = () => {
-    setPromptTarget('login');
-    setShowPasswordPrompt(true);
   };
 
   const isTeacher = authState.role === 'teacher';
@@ -99,14 +107,14 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="sanad-main-header"
-      className="fixed top-0 left-0 right-0 z-40 h-13 sm:h-14 bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] shadow-md flex flex-col justify-between"
+      className="shrink-0 w-full z-40 h-13 sm:h-14 bg-gradient-to-r from-[#0E5C56] to-[#0A423E] text-[#F1E7CE] shadow-md flex flex-col justify-between"
     >
       {/* Decorative top gold line */}
       <div className="h-0.5 bg-gradient-to-r from-transparent via-[#B8860B]/80 to-transparent w-full" />
 
       <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 flex-1 flex items-center justify-between gap-3">
-        {/* Left: Hamburger Menu, Portal Home Button & Enlarged Student Name */}
-        <div className="flex items-center gap-1.5 sm:gap-2 select-none" id="brand-container">
+        {/* Left: Hamburger Menu, Portal Logo & Student Name */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 select-none" id="brand-container">
           {/* Hamburger Menu Button */}
           <button
             id="hamburger-sidebar-btn"
@@ -132,14 +140,14 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'Main Portal (All Families)'
                 : 'Main Portal / Login'
             }
-            className={`p-1 rounded-lg hover:bg-white/10 active:bg-white/20 transition-all flex items-center justify-center group shrink-0 ${
+            className={`p-0.5 rounded-full hover:scale-105 active:scale-95 transition-all flex items-center justify-center group shrink-0 ${
               isParent ? 'opacity-80 cursor-default' : 'cursor-pointer'
             }`}
           >
             <img
               src="/logo.png"
               alt="Quran Homework Logo"
-              className="w-6.5 h-6.5 sm:w-7.5 sm:h-7.5 rounded-full object-cover border border-[#B8860B]/70 shadow-xs group-hover:scale-105 transition-transform"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-[#B8860B] shadow-xs"
             />
           </button>
 
@@ -151,172 +159,142 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Smart Voice Dictation Button for Teacher/Parent with edit access */}
+        {/* Right Action Controls: Matching user screenshot */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Voice AI Button for Teacher/Parent */}
           {canEditCurrentFamily && onOpenVoiceDictation && (
             <button
               id="voice-dictation-header-btn"
               type="button"
               onClick={onOpenVoiceDictation}
-              className="px-2.5 sm:px-3 py-1 bg-gradient-to-r from-[#B8860B] to-[#976D07] hover:brightness-110 text-white rounded-lg text-xs font-bold tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+              className="px-2.5 py-1 bg-gradient-to-r from-[#B8860B] to-[#976D07] hover:brightness-110 text-white rounded-lg text-xs font-bold tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
               title="Voice Dictation with AI"
             >
               <Mic className="w-3.5 h-3.5 text-[#F1E7CE] animate-pulse" />
               <span className="hidden sm:inline">Voice AI</span>
-              <span className="sm:hidden">Voice</span>
             </button>
           )}
 
-          {/* Subtle Supabase Connection Status */}
-          {isSupabaseConnected && (
-            <div className="relative">
+          {/* Database Icon with Green Indicator Dot */}
+          <div className="relative">
+            <div
+              id="database-status-indicator"
+              className="w-8 h-8 rounded-xl bg-white/10 border border-white/15 text-[#E5C378] flex items-center justify-center shadow-2xs select-none"
+              title={isOnline ? 'Database Connected & Saved' : 'Reconnecting...'}
+            >
+              <Database className="w-4 h-4 text-[#E5C378]" />
+              <span
+                className={`absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-[#0E5C56] ${
+                  isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* Key Login / Teacher Button (Matching image) */}
+          <div className="relative">
+            {isTeacher ? (
+              <div className="flex items-center gap-1 bg-[#B8860B]/25 border border-[#B8860B]/60 rounded-xl p-0.5 pl-2 shadow-xs">
+                <span className="text-xs font-bold text-[#F1E7CE] flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-[#E5C378]" />
+                  <span>Teacher</span>
+                </span>
+                <button
+                  id="back-to-student-btn"
+                  type="button"
+                  onClick={onLogout}
+                  className="px-2 py-0.5 bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg text-[11px] font-bold tracking-wide transition-colors cursor-pointer shadow-2xs whitespace-nowrap active:scale-95 ml-1"
+                  title="Exit Teacher Mode"
+                >
+                  Exit
+                </button>
+              </div>
+            ) : isParent ? (
+              <div className="flex items-center gap-1 bg-emerald-950/70 border border-emerald-400/50 rounded-xl p-0.5 pl-2 shadow-xs">
+                <span className="text-xs font-bold text-emerald-200">Parent</span>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-2 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold tracking-wide transition-colors cursor-pointer shadow-2xs ml-1"
+                  title="Exit Parent Mode"
+                >
+                  Exit
+                </button>
+              </div>
+            ) : (
               <button
-                id="supabase-header-status-btn"
+                id="header-login-btn"
                 type="button"
                 onClick={() => {
-                  setShowSupabaseTooltip((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
-                      tooltipTimeoutRef.current = setTimeout(() => setShowSupabaseTooltip(false), 2500);
-                    }
-                    return next;
-                  });
+                  setPromptTarget('login');
+                  setShowPasswordPrompt(true);
                 }}
-                onMouseEnter={() => setShowSupabaseTooltip(true)}
-                onMouseLeave={() => {
-                  if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
-                  setShowSupabaseTooltip(false);
-                }}
-                aria-label="Supabase متصل"
-                title="Supabase متصل"
-                className="relative p-1.5 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-[#F1E7CE] hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
-              >
-                <Database className="w-4 h-4 text-[#E5C378]" />
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-1 ring-[#0E5C56] shadow-[0_0_4px_#34d399]" />
-              </button>
-
-              {/* Tooltip */}
-              {showSupabaseTooltip && (
-                <div
-                  id="supabase-header-tooltip"
-                  dir="rtl"
-                  className="absolute top-full mt-1.5 right-0 z-50 bg-[#0A423E] text-[#F1E7CE] text-[11px] font-semibold py-1 px-2.5 rounded-lg border border-[#B8860B]/40 shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-150 flex items-center gap-1.5"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  <span>Supabase متصل</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Role Status & Toggle Button (3 Distinct States: Teacher, Parent, Student/Logged Out) */}
-          {isTeacher ? (
-            /* State 1: TEACHER (Full Edit Access) */
-            <div className="flex items-center gap-1 bg-[#B8860B]/25 border border-[#B8860B]/60 rounded-xl p-0.5 pl-2 shadow-xs">
-              <span className="text-xs font-black text-[#F1E7CE] flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5 text-[#E5C378]" />
-                <span>Teacher</span>
-              </span>
-              <button
-                id="back-to-student-btn"
-                type="button"
-                onClick={onLogout}
-                className="px-2 sm:px-2.5 py-0.5 bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg text-[11px] font-bold tracking-wide transition-colors cursor-pointer shadow-2xs whitespace-nowrap active:scale-95 ml-1"
-                title="Log out and return to Student View"
-              >
-                Exit
-              </button>
-            </div>
-          ) : isParent ? (
-            /* State 2: PARENT (Family-Scoped Access) */
-            <div className="flex items-center gap-1 bg-emerald-950/70 border border-emerald-400/50 rounded-xl p-0.5 pl-2 shadow-xs">
-              <span className="text-xs font-black text-emerald-200 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Parent</span>
-              </span>
-              <button
-                id="parent-logout-btn"
-                type="button"
-                onClick={onLogout}
-                className="px-2 sm:px-2.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold tracking-wide transition-colors cursor-pointer shadow-2xs whitespace-nowrap active:scale-95 ml-1"
-                title="Log out from Parent View"
-              >
-                Exit
-              </button>
-            </div>
-          ) : (
-            /* State 3: LOGGED OUT / STUDENT (Show Login) */
-            <div className="relative">
-              <button
-                id="header-login-trigger-btn"
-                type="button"
-                onClick={handleLoginClick}
-                className="px-2.5 sm:px-3.5 py-1 bg-[#FBF6E8]/10 hover:bg-[#FBF6E8]/20 border border-[#F1E7CE]/30 rounded-lg text-[#F1E7CE] text-xs font-bold tracking-wide flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap active:scale-95"
-                title="Login"
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="Login as Teacher or Parent"
               >
                 <KeyRound className="w-3.5 h-3.5 text-[#B8860B]" />
                 <span>Login</span>
               </button>
+            )}
 
-              {/* Inline Password Prompt */}
-              {showPasswordPrompt && (
-                <div
-                  id="teacher-password-popover"
-                  className="absolute right-0 mt-2 w-72 p-3.5 bg-[#0A423E] border border-[#B8860B]/40 rounded-xl shadow-2xl z-50 text-[#F1E7CE]"
-                >
-                  <form onSubmit={handlePasswordSubmit} className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#B8860B] uppercase tracking-wider">
-                        {promptTarget === 'portal' ? 'Main Portal Access' : 'Teacher / Parent Access'}
-                      </span>
-                    </div>
+            {/* Password Prompt Popover */}
+            {showPasswordPrompt && (
+              <div
+                id="teacher-password-popover"
+                className="absolute right-0 top-full mt-2 w-72 p-3.5 bg-[#0A423E] border border-[#B8860B]/40 rounded-xl shadow-2xl z-50 text-[#F1E7CE] animate-in fade-in zoom-in-95 duration-100"
+              >
+                <form onSubmit={handlePasswordSubmit} className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#B8860B] uppercase tracking-wider">
+                      {promptTarget === 'portal' ? 'Main Portal Access' : 'Teacher Access'}
+                    </span>
+                  </div>
 
-                    <p className="text-[11px] text-[#F1E7CE]/80 leading-tight">
-                      أدخل كلمة مرور المعلم أو ولي الأمر
+                  <p className="text-[11px] text-[#F1E7CE]/80 leading-tight">
+                    Enter teacher password to enable edit mode
+                  </p>
+
+                  <input
+                    ref={inputRef}
+                    id="teacher-password-input"
+                    type="password"
+                    disabled={isVerifying}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setErrorMsg('');
+                    }}
+                    placeholder="Password..."
+                    className="w-full px-3 py-1.5 text-xs bg-black/30 border border-[#B8860B]/30 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#B8860B] text-center font-mono"
+                  />
+
+                  {errorMsg && (
+                    <p className="text-[11px] text-[#F87171] font-medium text-center">
+                      {errorMsg}
                     </p>
+                  )}
 
-                    <input
-                      ref={inputRef}
-                      id="teacher-password-input"
-                      type="password"
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordPrompt(false)}
+                      className="px-2.5 py-1 text-xs text-[#F1E7CE]/70 hover:text-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      id="teacher-password-submit-btn"
+                      type="submit"
                       disabled={isVerifying}
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setErrorMsg('');
-                      }}
-                      placeholder="Password..."
-                      className="w-full px-3 py-1.5 text-xs bg-black/30 border border-[#B8860B]/30 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-[#B8860B] text-center font-mono"
-                    />
-
-                    {errorMsg && (
-                      <p className="text-[11px] text-[#F87171] font-medium text-center">{errorMsg}</p>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setShowPasswordPrompt(false)}
-                        className="px-2.5 py-1 text-xs text-[#F1E7CE]/70 hover:text-white cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        id="teacher-password-submit-btn"
-                        type="submit"
-                        disabled={isVerifying}
-                        className="px-3 py-1 text-xs font-bold bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
-                      >
-                        {isVerifying ? 'Checking...' : 'Unlock'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </div>
-          )}
+                      className="px-3 py-1 text-xs font-bold bg-[#B8860B] hover:bg-[#9B7008] text-white rounded-lg cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
+                    >
+                      {isVerifying ? 'Checking...' : 'Unlock'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

@@ -1,176 +1,305 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Student } from '../types';
 import { QURAN_SURAHS, QuranSurah } from '../data/quranSurahs';
-import { BookOpen, MessageSquare, ClipboardCheck, ArrowRight, Calendar, ChevronDown } from 'lucide-react';
+import { BookOpen, Bookmark, ArrowLeft, ChevronsUpDown } from 'lucide-react';
 
-interface StudentTopSectionProps {
-  student: Student | null;
-  visibleMonthLabel: string;
-  onOpenSummary: () => void;
-  onOpenNotes: () => void;
-  onViewTodayHomework: () => void;
-  onOpenMonthPicker: () => void;
+export type StudentTopNavTab = 'homework' | 'reading' | 'summary' | 'focus';
+
+/* =========================================================================
+    1. 4-PILL TOP NAVIGATION BAR (Fixed directly under header)
+   ========================================================================= */
+interface StudentTopNavPillsProps {
+  activeTab: StudentTopNavTab;
+  onSelectTab: (tab: StudentTopNavTab) => void;
+  onOpenSummary?: () => void;
+  onOpenNotes?: () => void;
+  unreadCount?: number;
 }
 
-export const StudentTopSection: React.FC<StudentTopSectionProps> = ({
+export const StudentTopNavPills: React.FC<StudentTopNavPillsProps> = ({
+  activeTab,
+  onSelectTab,
+  unreadCount = 0,
+}) => {
+  return (
+    <div
+      id="fixed-top-pills-bar"
+      className="shrink-0 w-full z-30 bg-[#F5EFDD] border-b border-[#B8860B]/15 shadow-2xs py-1.5"
+    >
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 flex items-center justify-center">
+        <div
+          id="top-pill-navigation"
+          className="flex items-center justify-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar py-0.5 px-1 select-none max-w-full"
+        >
+          {/* 1. Homework Pill */}
+          <button
+            id="nav-pill-homework"
+            type="button"
+            onClick={() => onSelectTab('homework')}
+            className={`px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+              activeTab === 'homework'
+                ? 'bg-[#0E5C56] text-white shadow-xs'
+                : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
+            }`}
+          >
+            Homework
+          </button>
+
+          {/* 2. Reading Pill */}
+          <button
+            id="nav-pill-reading"
+            type="button"
+            onClick={() => onSelectTab('reading')}
+            className={`px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+              activeTab === 'reading'
+                ? 'bg-[#0E5C56] text-white shadow-xs'
+                : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
+            }`}
+          >
+            Reading
+          </button>
+
+          {/* 3. Memorization summary Pill */}
+          <button
+            id="nav-pill-summary"
+            type="button"
+            onClick={() => onSelectTab('summary')}
+            className={`px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+              activeTab === 'summary'
+                ? 'bg-[#0E5C56] text-white shadow-xs'
+                : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
+            }`}
+            title="Open Memorization Summary (114 Surahs Tracker)"
+          >
+            Memorization summary
+          </button>
+
+          {/* 4. Focus Notes Pill */}
+          <button
+            id="nav-pill-notes"
+            type="button"
+            onClick={() => onSelectTab('focus')}
+            className={`relative px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+              activeTab === 'focus'
+                ? 'bg-[#0E5C56] text-white shadow-xs'
+                : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
+            }`}
+            title="Open Focus Notes & Guidance"
+          >
+            <span>Focus Notes</span>
+            {unreadCount > 0 && (
+              <span
+                id="notes-count-badge"
+                className={`ml-1.5 px-1.5 py-0.2 text-[10px] font-bold rounded-full inline-flex items-center justify-center tabular-nums ${
+                  activeTab === 'focus'
+                    ? 'bg-white text-[#0E5C56]'
+                    : 'bg-[#A32D2D] text-white'
+                }`}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+    2. READING CARD COMPONENT (Rendered inside main when activeTab === 'reading')
+   ========================================================================= */
+interface StudentReadingCardProps {
+  student: Student | null;
+  onSelectTab: (tab: 'homework' | 'reading') => void;
+  onOpenNotes?: () => void;
+  isTeacherMode?: boolean;
+  onUpdateStudentTilawa?: (studentId: string, surahNumber: number, ayahNumber: number) => void;
+}
+
+export const StudentReadingCard: React.FC<StudentReadingCardProps> = ({
   student,
-  visibleMonthLabel,
-  onOpenSummary,
-  onOpenNotes,
-  onViewTodayHomework,
-  onOpenMonthPicker,
+  onSelectTab,
+  isTeacherMode,
+  onUpdateStudentTilawa,
 }) => {
   if (!student) return null;
 
-  // Resolve current reading surah and ayah
-  const currentSurahNumber = student.tilawaSurah || 33; // Default to Al-Ahzab (33)
+  const currentSurahNumber = student.tilawaSurah || 33;
   const currentSurah: QuranSurah =
     QURAN_SURAHS.find((s) => s.number === currentSurahNumber) ||
     QURAN_SURAHS[32] ||
     QURAN_SURAHS[0];
   const currentAyah = Math.min(student.tilawaAyah || 54, currentSurah.ayahCount);
 
-  // Unread note count calculation (hidden when 0)
-  const unreadCount = student.memorizationFocus
+  const handleSurahChange = (newSurahNum: number) => {
+    const targetSurah = QURAN_SURAHS.find((s) => s.number === newSurahNum);
+    const maxAyah = targetSurah?.ayahCount || 1;
+    const newAyah = Math.min(currentAyah, maxAyah);
+    if (student && onUpdateStudentTilawa) {
+      onUpdateStudentTilawa(student.id, newSurahNum, newAyah);
+    }
+  };
+
+  const handleAyahChange = (newAyahNum: number) => {
+    if (student && onUpdateStudentTilawa) {
+      onUpdateStudentTilawa(student.id, currentSurahNumber, newAyahNum);
+    }
+  };
+
+  const progressPercent = Math.min(
+    100,
+    Math.max(2, (currentAyah / currentSurah.ayahCount) * 100)
+  );
+
+  return (
+    <div className="w-full pt-1 pb-4">
+      <div className="w-full bg-white rounded-[26px] p-5 sm:p-6 shadow-xs border border-[#B8860B]/20 flex flex-col space-y-3">
+        {/* Top Dropdowns: Select Surah & Ayah */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {/* Select Surah */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5B6478] mb-1.5 font-sans">
+              Select Surah:
+            </label>
+            <div className="relative">
+              <select
+                value={currentSurahNumber}
+                onChange={(e) => handleSurahChange(Number(e.target.value))}
+                className="w-full appearance-none bg-white border border-[#B8860B]/40 hover:border-[#B8860B] rounded-xl py-2 pl-3 pr-8 text-xs sm:text-sm font-bold text-[#0E5C56] font-sans focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 transition-all cursor-pointer shadow-2xs truncate"
+              >
+                {QURAN_SURAHS.map((s) => (
+                  <option key={s.number} value={s.number}>
+                    {s.number}. {s.name} ({s.arabicName})
+                  </option>
+                ))}
+              </select>
+              <ChevronsUpDown className="w-4 h-4 text-[#0E5C56] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Select Ayah */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5B6478] mb-1.5 font-sans">
+              Ayah:
+            </label>
+            <div className="relative">
+              <select
+                value={currentAyah}
+                onChange={(e) => handleAyahChange(Number(e.target.value))}
+                className="w-full appearance-none bg-white border border-[#B8860B]/40 hover:border-[#B8860B] rounded-xl py-2 pl-3 pr-8 text-xs sm:text-sm font-bold text-[#0E5C56] font-sans focus:outline-none focus:ring-2 focus:ring-[#0E5C56]/20 transition-all cursor-pointer shadow-2xs"
+              >
+                {Array.from({ length: currentSurah.ayahCount }, (_, i) => i + 1).map((a) => (
+                  <option key={a} value={a}>
+                    Ayah {a}
+                  </option>
+                ))}
+              </select>
+              <ChevronsUpDown className="w-4 h-4 text-[#0E5C56] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <hr className="border-t border-[#F2ECE1] my-1" />
+
+        {/* Big Centered Arabic Surah Name, English Subtitle & Ayah Counter */}
+        <div className="flex flex-col items-center justify-center text-center py-2 space-y-1 select-none">
+          {/* Big Calligraphic Arabic Name */}
+          <h2
+            dir="rtl"
+            className="font-arabic font-extrabold text-4xl sm:text-5xl text-[#0E5C56] leading-tight"
+          >
+            {currentSurah.arabicName}
+          </h2>
+
+          {/* English Surah Name */}
+          <p className="text-sm font-semibold text-[#5B6478] font-sans">
+            {currentSurah.name}
+          </p>
+
+          {/* Ayah display: Ayah [54 in bold gold] / 73 */}
+          <div className="flex items-baseline justify-center gap-1.5 pt-2 text-[#5B6478] font-sans font-medium text-base sm:text-lg">
+            <span>Ayah</span>
+            <span className="text-3xl sm:text-4xl font-black text-[#B8860B] leading-none">
+              {currentAyah}
+            </span>
+            <span className="text-base text-[#5B6478]">
+              / {currentSurah.ayahCount}
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full pt-4 px-1">
+            <div className="w-full h-3 sm:h-3.5 bg-[#F5EFDD] rounded-full overflow-hidden p-0.5">
+              <div
+                className="h-full bg-[#0E5C56] rounded-full transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Return to Homework Link */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => onSelectTab('homework')}
+            className="text-xs font-bold text-[#0E5C56] hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Return to Homework</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+    3. BACKWARDS-COMPATIBLE WRAPPER
+   ========================================================================= */
+interface StudentTopSectionProps {
+  student: Student | null;
+  activeTab: 'homework' | 'reading';
+  onSelectTab: (tab: 'homework' | 'reading') => void;
+  onOpenSummary: () => void;
+  onOpenNotes: () => void;
+  isTeacherMode?: boolean;
+  onUpdateStudentTilawa?: (studentId: string, surahNumber: number, ayahNumber: number) => void;
+}
+
+export const StudentTopSection: React.FC<StudentTopSectionProps> = ({
+  student,
+  activeTab,
+  onSelectTab,
+  onOpenSummary,
+  onOpenNotes,
+  isTeacherMode,
+  onUpdateStudentTilawa,
+}) => {
+  const unreadCount = student?.memorizationFocus
     ? student.memorizationFocus.split('\n').filter((l) => l.trim().length > 0).length
     : 0;
 
-  const photoSrc = student.photoUrl || '/student_default.jpg';
-
   return (
-    <div id="student-top-section" className="w-full flex flex-col space-y-2 pt-0.5 pb-1">
-      {/* A. Header Card */}
-      <div
-        id="student-header-card"
-        className="w-full bg-white rounded-[20px] p-3 sm:p-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-[#B8860B]/15 flex items-center justify-between gap-2.5 sm:gap-3"
-      >
-        {/* Left: Round Student Photo */}
-        <div className="relative shrink-0">
-          <img
-            src={photoSrc}
-            alt={student.name}
-            onError={(e) => {
-              // Fallback to default photo if specified photo fails
-              const target = e.currentTarget;
-              if (target.src !== '/student_default.jpg') {
-                target.src = '/student_default.jpg';
-              }
-            }}
-            className="w-[56px] h-[56px] sm:w-[60px] sm:h-[60px] rounded-full object-cover ring-2 ring-[#B8860B]/25 shadow-xs"
-            style={{
-              objectPosition: student.photoPosition || 'center 20%',
-              transform: student.photoZoom ? `scale(${student.photoZoom})` : undefined,
-            }}
-          />
-        </div>
-
-        {/* Center: Current Reading Label & Surah / Ayah info */}
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <span className="text-[11px] sm:text-xs font-medium text-[#5B6478] font-sans leading-tight mb-1">
-            Current reading
-          </span>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
-            {/* Arabic Surah Name in large Arabic font */}
-            <span
-              dir="rtl"
-              className="font-arabic font-bold text-xl sm:text-2xl text-[#0E5C56] leading-none shrink-0"
-            >
-              {currentSurah.arabicName}
-            </span>
-
-            {/* Subtle separator dot */}
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-[#9B7008] inline-block shrink-0"
-              aria-hidden="true"
-            />
-
-            {/* Ayah number in dark gold (separate inline element with dir="ltr") */}
-            <span
-              dir="ltr"
-              className="font-sans font-extrabold text-sm sm:text-base text-[#9B7008] leading-none whitespace-nowrap shrink-0"
-            >
-              Ayah {currentAyah}
-            </span>
-          </div>
-        </div>
-
-        {/* Right: Summary and Note icon buttons */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Summary button */}
-          <div className="flex flex-col items-center">
-            <button
-              id="top-summary-btn"
-              type="button"
-              onClick={onOpenSummary}
-              className="w-[42px] h-[42px] sm:w-[46px] sm:h-[46px] rounded-xl bg-[#E0F2F1] text-[#0E5C56] hover:bg-[#CCECE8] active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs border border-[#0E5C56]/10"
-              title="Open Memorization Summary"
-            >
-              <BookOpen className="w-5 h-5 text-[#0E5C56] stroke-[2.2]" />
-            </button>
-            <span className="text-[11px] font-semibold text-slate-700 mt-1 select-none">
-              Summary
-            </span>
-          </div>
-
-          {/* Note button */}
-          <div className="flex flex-col items-center">
-            <button
-              id="top-note-btn"
-              type="button"
-              onClick={onOpenNotes}
-              className="relative w-[42px] h-[42px] sm:w-[46px] sm:h-[46px] rounded-xl bg-[#E1EAF8] text-[#2563EB] hover:bg-[#D4E2F6] active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs border border-[#2563EB]/10"
-              title="Open Teacher Note"
-            >
-              <MessageSquare className="w-5 h-5 text-[#2563EB] stroke-[2.2]" />
-
-              {/* Red unread badge (hidden when 0) */}
-              {unreadCount > 0 && (
-                <span
-                  id="top-note-badge"
-                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#DC2626] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs border-2 border-white pointer-events-none"
-                >
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            <span className="text-[11px] font-semibold text-slate-700 mt-1 select-none">
-              Note
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* B. Under the card: Row with two buttons (~44px height) */}
-      <div className="w-full flex items-center gap-2 pt-0.5">
-        {/* Primary button: "View today's homework" */}
-        <button
-          id="view-today-homework-btn"
-          type="button"
-          onClick={onViewTodayHomework}
-          className="flex-1 h-[44px] min-h-[44px] px-3.5 sm:px-4 rounded-full bg-[#0E5C56] hover:bg-[#0B4A45] active:scale-98 text-white font-sans font-bold text-xs sm:text-sm flex items-center justify-between gap-2 shadow-xs transition-all cursor-pointer border border-[#0E5C56]"
-          title="View today's homework"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <ClipboardCheck className="w-4 h-4 text-[#F5EFDD] shrink-0 stroke-[2.2]" />
-            <span className="truncate">View today&apos;s homework</span>
-          </div>
-          <ArrowRight className="w-4 h-4 text-[#F5EFDD] shrink-0 stroke-[2.2]" />
-        </button>
-
-        {/* Secondary button: Calendar + Month Year + Down chevron */}
-        <button
-          id="month-picker-toggle-btn"
-          type="button"
-          onClick={onOpenMonthPicker}
-          className="h-[44px] min-h-[44px] px-3 sm:px-3.5 rounded-full bg-white hover:bg-emerald-50/50 active:scale-98 border border-[#0E5C56]/40 text-[#0E5C56] font-sans font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap shrink-0"
-          title="Select month"
-        >
-          <Calendar className="w-4 h-4 text-[#0E5C56] shrink-0 stroke-[2]" />
-          <span>{visibleMonthLabel}</span>
-          <ChevronDown className="w-4 h-4 text-[#0E5C56] shrink-0 stroke-[2.2]" />
-        </button>
-      </div>
-    </div>
+    <>
+      <StudentTopNavPills
+        activeTab={activeTab}
+        onSelectTab={onSelectTab}
+        onOpenSummary={onOpenSummary}
+        onOpenNotes={onOpenNotes}
+        unreadCount={unreadCount}
+      />
+      {activeTab === 'reading' && (
+        <StudentReadingCard
+          student={student}
+          onSelectTab={onSelectTab}
+          onOpenNotes={onOpenNotes}
+          isTeacherMode={isTeacherMode}
+          onUpdateStudentTilawa={onUpdateStudentTilawa}
+        />
+      )}
+    </>
   );
 };
