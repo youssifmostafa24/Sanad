@@ -273,34 +273,36 @@ export const StudentSidebarDrawer: React.FC<StudentSidebarDrawerProps> = ({
                       </div>
                     </button>
 
-                    {/* Row 3: Student settings */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenStudentSettings?.(student);
-                      }}
-                      className="w-full p-3.5 sm:p-4 flex items-center justify-between hover:bg-[#FAF6EE]/80 transition-colors cursor-pointer group text-left"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-[#5B6478]/10 flex items-center justify-center text-[#5B6478] group-hover:scale-105 transition-transform shrink-0">
-                          <Settings className="w-5 h-5 text-[#5B6478]" />
+                    {/* Row 3: Student settings (Teacher only) */}
+                    {isTeacherMode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenStudentSettings?.(student);
+                        }}
+                        className="w-full p-3.5 sm:p-4 flex items-center justify-between hover:bg-[#FAF6EE]/80 transition-colors cursor-pointer group text-left"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-[#5B6478]/10 flex items-center justify-center text-[#5B6478] group-hover:scale-105 transition-transform shrink-0">
+                            <Settings className="w-5 h-5 text-[#5B6478]" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-sm text-[#1F2A3D] block truncate">
+                              Student settings
+                            </span>
+                            <span className="text-xs text-[#5B6478] block truncate">
+                              Photo, attendance, share link
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <span className="font-bold text-sm text-[#1F2A3D] block truncate">
-                            Student settings
-                          </span>
-                          <span className="text-xs text-[#5B6478] block truncate">
-                            Photo, attendance, share link
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        <Share2 className="w-3.5 h-3.5 text-[#5B6478]/40" />
-                        <ChevronRight className="w-4 h-4 text-[#B8860B] group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    </button>
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <Share2 className="w-3.5 h-3.5 text-[#5B6478]/40" />
+                          <ChevronRight className="w-4 h-4 text-[#B8860B] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+                    )}
                   </div>
                 </section>
               </div>

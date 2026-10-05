@@ -11,7 +11,17 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const port = process.env.PORT || 3000;
+  
+  // Parse command-line args for --port, or use env var (defaulting to 3000).
+  // Note: in AI Studio / Cloud Run containers, NGINX is bound to port 8080.
+  // The app server must run on port 3000 to be proxied by NGINX.
+  const portArgIndex = process.argv.indexOf('--port');
+  const cliPort =
+    portArgIndex !== -1 && process.argv[portArgIndex + 1]
+      ? Number(process.argv[portArgIndex + 1])
+      : null;
+  const rawEnvPort = process.env.PORT ? Number(process.env.PORT) : 3000;
+  const port = cliPort || (rawEnvPort === 8080 ? 3000 : rawEnvPort) || 3000;
 
   app.use(express.json({ limit: '10mb' }));
 
@@ -129,8 +139,19 @@ Extract and return ONLY a valid JSON object matching this schema.`;
     app.use(vite.middlewares);
   }
 
-  app.listen(Number(port), '0.0.0.0', () => {
+  const server = app.listen(Number(port), '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE' && port !== 3000) {
+      console.warn(`Port ${port} in use, falling back to port 3000...`);
+      app.listen(3000, '0.0.0.0', () => {
+        console.log(`Server running at http://0.0.0.0:3000`);
+      });
+    } else {
+      console.error('Server listen error:', err);
+    }
   });
 }
 

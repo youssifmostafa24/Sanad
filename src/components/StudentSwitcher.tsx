@@ -38,10 +38,11 @@ export const StudentSwitcher: React.FC<StudentSwitcherProps> = ({
     <footer
       id="student-bottom-switcher"
       aria-label="Student Selection"
-      className="fixed bottom-0 left-0 right-0 z-30 bg-[#F5EFDD] border-t border-[#B8860B]/20 shadow-[0_-2px_10px_rgba(0,0,0,0.04)] h-14 sm:h-16 flex items-center justify-center"
+      className="flex-none shrink-0 w-full z-30 bg-[#F5EFDD] border-t border-[#B8860B]/20 shadow-[0_-2px_10px_rgba(0,0,0,0.04)] flex items-center justify-center"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       dir="ltr"
     >
-      <div className="h-full w-full flex items-center justify-center px-4 max-w-4xl mx-auto">
+      <div className="h-14 sm:h-16 w-full flex items-center justify-center px-4 max-w-4xl mx-auto">
         <nav
           role="tablist"
           aria-label="Students"

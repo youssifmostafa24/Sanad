@@ -14,6 +14,21 @@
   font-feature-settings: "tnum";
 }
 
+/* Prevent window-level scrolling on iOS Safari / Chrome */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Custom scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -22,3 +37,16 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Smooth scrolling and touch performance optimizations */
+#main-scroll-view, #reading-scroll-view, #summary-scroll-view, #focus-scroll-view {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+}
+
+[id^="entry-row-"] {
+  content-visibility: auto;
+  contain-intrinsic-size: 76px;
+}
+

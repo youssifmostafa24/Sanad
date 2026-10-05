@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ArrowRight, BookOpen, Check, Edit3 } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
@@ -64,6 +65,25 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
     }
   }, [isOpen, initialText]);
 
+  // Lock body scroll and listen for Escape key when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSurahChange = (surahNum: number) => {
@@ -103,20 +123,20 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       id="quran-ayah-picker-overlay"
       dir="ltr"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
         id="quran-ayah-picker-modal"
-        className="w-full max-w-lg bg-[#FAF6EE] text-[#1F2A3D] rounded-2xl shadow-2xl border border-[#B8860B]/30 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-lg bg-[#FAF6EE] text-[#1F2A3D] rounded-2xl shadow-2xl border border-[#B8860B]/30 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-4 py-3 bg-[#0E5C56] text-[#F1E7CE] flex items-center justify-between border-b border-[#B8860B]/40 select-none">
+        <div className="px-4 py-3 bg-[#0E5C56] text-[#F1E7CE] flex items-center justify-between border-b border-[#B8860B]/40 select-none shrink-0">
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[#B8860B]" />
             <h2 className="text-sm sm:text-base font-bold text-[#F1E7CE]">
@@ -135,7 +155,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-4 sm:p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Free Writing Toggle Switch */}
           <div className="flex items-center justify-between bg-white rounded-xl border border-[#B8860B]/25 px-3.5 py-2.5 shadow-2xs">
             <div className="flex items-center gap-2">
@@ -329,6 +349,7 @@ export const QuranAyahPickerModal: React.FC<QuranAyahPickerModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

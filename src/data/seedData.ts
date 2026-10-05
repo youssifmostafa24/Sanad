@@ -486,7 +486,7 @@ export function getInitialData(): { families: Family[]; students: Student[] } {
   const families: Family[] = [
     {
       id: 'family-1',
-      name: 'Sulaymn + Ibrahim + Ali',
+      name: 'Sulayman + Ibrahim + Ali',
       studentIds: ['student-sulayman', 'student-ibrahim', 'student-ali'],
       displayOrder: 1,
       isHidden: false,

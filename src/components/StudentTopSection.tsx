@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Student } from '../types';
+import { Student, StudentTopNavTab } from '../types';
 import { QURAN_SURAHS, QuranSurah } from '../data/quranSurahs';
-import { BookOpen, Bookmark, ArrowLeft, ChevronsUpDown } from 'lucide-react';
+import { BookOpen, Bookmark, ArrowLeft, ChevronsUpDown, Home } from 'lucide-react';
 
-export type StudentTopNavTab = 'homework' | 'reading' | 'summary' | 'focus';
+export type { StudentTopNavTab };
 
 /* =========================================================================
     1. 4-PILL TOP NAVIGATION BAR (Fixed directly under header)
@@ -31,32 +31,50 @@ export const StudentTopNavPills: React.FC<StudentTopNavPillsProps> = ({
           id="top-pill-navigation"
           className="flex items-center justify-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar py-0.5 px-1 select-none max-w-full"
         >
-          {/* 1. Homework Pill */}
+          {/* 1. Homework Pill (Home page icon) */}
           <button
             id="nav-pill-homework"
             type="button"
             onClick={() => onSelectTab('homework')}
-            className={`px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+            className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 flex items-center gap-2 ${
               activeTab === 'homework'
                 ? 'bg-[#0E5C56] text-white shadow-xs'
                 : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
             }`}
           >
-            Homework
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-colors ${
+                activeTab === 'homework'
+                  ? 'bg-white/25 text-white'
+                  : 'bg-[#0E5C56] text-white'
+              }`}
+            >
+              <Home className="w-3 h-3 text-white" />
+            </span>
+            <span>Homework</span>
           </button>
 
-          {/* 2. Reading Pill */}
+          {/* 2. Reading Pill (BookOpen icon) */}
           <button
             id="nav-pill-reading"
             type="button"
             onClick={() => onSelectTab('reading')}
-            className={`px-4 sm:px-5 py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 ${
+            className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-sans font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer shadow-2xs active:scale-95 flex items-center gap-2 ${
               activeTab === 'reading'
                 ? 'bg-[#0E5C56] text-white shadow-xs'
                 : 'bg-white text-[#1F2A3D] hover:bg-slate-50 border border-black/5'
             }`}
           >
-            Reading
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-colors ${
+                activeTab === 'reading'
+                  ? 'bg-white/25 text-white'
+                  : 'bg-[#0E5C56] text-white'
+              }`}
+            >
+              <BookOpen className="w-3 h-3 text-white" />
+            </span>
+            <span>Reading</span>
           </button>
 
           {/* 3. Memorization summary Pill */}

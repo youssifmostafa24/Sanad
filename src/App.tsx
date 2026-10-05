@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars, AuthState } from './types';
+import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars, AuthState, StudentTopNavTab, FocusPoint } from './types';
+import { getMigratedFocusPoints } from './utils/notesUtils';
 import { getInitialData } from './data/seedData';
 import {
   formatLocalDate,
@@ -12,13 +13,14 @@ import {
   isCurrentStudyWeek,
   getWeeklyStarCardTitle,
 } from './utils/dateUtils';
-import { Header } from './components/Header';
 import { HomeworkRow } from './components/HomeworkRow';
 import { AddHomeworkRow } from './components/AddHomeworkRow';
 import { WeeklyStarBand } from './components/WeeklyStarBand';
-import { StudentSwitcher } from './components/StudentSwitcher';
-import { StudentSidebarDrawer } from './components/StudentSidebarDrawer';
-import { StudentTopNavPills, StudentReadingCard, StudentTopNavTab } from './components/StudentTopSection';
+import { TopNavGridBar } from './components/TopNavGridBar';
+import { AppBottomBar } from './components/AppBottomBar';
+import { StudentVideosView } from './components/StudentVideosView';
+import { TeacherPasswordModal } from './components/TeacherPasswordModal';
+import { StudentReadingCard } from './components/StudentTopSection';
 import { StudentMemorizationSummaryView } from './components/StudentMemorizationSummaryView';
 import { StudentFocusNotesView } from './components/StudentFocusNotesView';
 import { MonthPickerBottomSheet } from './components/MonthPickerBottomSheet';
@@ -73,6 +75,7 @@ export default function App() {
             })
             .slice(0, 3)
             .map((fam: Family) => {
+              const name = fam.name.replace(/Sulaymn/g, 'Sulayman');
               if (fam.id === 'family-3') {
                 return {
                   ...fam,
@@ -80,11 +83,12 @@ export default function App() {
                   studentIds: ['student-hayaa', 'student-yusuf'],
                 };
               }
-              return fam;
+              return { ...fam, name };
             });
 
           const normalizedStudents = parsed.students.map((st: Student) => ({
             ...st,
+            name: st.name.replace(/Sulaymn/g, 'Sulayman'),
             entries: (st.entries || []).map((e: Entry) => ({
               ...e,
               hifzText: normalizeQuranHomeworkText(e.hifzText),
@@ -341,10 +345,15 @@ export default function App() {
   const [headerVisible, setHeaderVisible] = useState<boolean>(true);
   const lastScrollYRef = useRef<number>(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const readingScrollRef = useRef<HTMLDivElement>(null);
+  const summaryScrollRef = useRef<HTMLDivElement>(null);
+  const focusScrollRef = useRef<HTMLDivElement>(null);
 
   const activeFamily = useMemo(() => {
     return data.families.find((f) => f.id === activeFamilyId) || data.families[0] || null;
   }, [data.families, activeFamilyId]);
+
+  const canEditCurrentFamily = canEdit(authState, activeFamily?.id);
 
   // Students available in current view (ordered according to family definition)
   const visibleStudents = useMemo(() => {
@@ -469,6 +478,40 @@ export default function App() {
     }));
   };
 
+  const handleAddFamily = (name: string) => {
+    const newId = `family-${Date.now()}`;
+    const newFam: Family = {
+      id: newId,
+      name: name.trim() || 'New Family',
+      studentIds: [],
+      displayOrder: data.families.length + 1,
+      isHidden: false,
+    };
+    setData((prev) => ({
+      ...prev,
+      families: [...prev.families, newFam],
+    }));
+  };
+
+  const handleAddStudent = (familyId: string, name: string) => {
+    const newStudentId = `student-${Date.now()}`;
+    const colors = ['#0E5C56', '#B8860B', '#2C3E50', '#8E44AD', '#D35400', '#16A085', '#27AE60'];
+    const newStudent: Student = {
+      id: newStudentId,
+      name: name.trim() || 'New Student',
+      color: colors[Math.floor(Math.random() * colors.length)],
+      entries: [],
+    };
+    setData((prev) => ({
+      ...prev,
+      students: [...prev.students, newStudent],
+      families: prev.families.map((f) =>
+        f.id === familyId ? { ...f, studentIds: [...f.studentIds, newStudentId] } : f
+      ),
+    }));
+    setSettingsStudentId(newStudentId);
+  };
+
   // Priority 2.2: Update student share security token
   const handleSaveStudentShareToken = (studentId: string, newToken: string) => {
     setData((prev) => ({
@@ -513,13 +556,41 @@ export default function App() {
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<StudentTopNavTab>('homework');
+  const [isTeacherPasswordModalOpen, setIsTeacherPasswordModalOpen] = useState<boolean>(false);
+
+  const [notesViewedTrigger, setNotesViewedTrigger] = useState(0);
+
+  const unreadNotesCount = useMemo(() => {
+    if (canEditCurrentFamily || !activeStudent) return 0;
+    const points = getMigratedFocusPoints(activeStudent);
+    if (points.length === 0) return 0;
+
+    const lastViewed = localStorage.getItem(`sanad_notes_viewed_${activeStudent.id}`);
+    if (!lastViewed) return points.length;
+
+    const lastViewedTime = new Date(lastViewed).getTime();
+    return points.filter((p) => new Date(p.updatedAt).getTime() > lastViewedTime).length;
+  }, [activeStudent, canEditCurrentFamily, notesViewedTrigger]);
+
+  useEffect(() => {
+    if (activeTab === 'notes' && activeStudent && !canEditCurrentFamily) {
+      localStorage.setItem(`sanad_notes_viewed_${activeStudent.id}`, new Date().toISOString());
+      setNotesViewedTrigger((prev) => prev + 1);
+    }
+  }, [activeTab, activeStudent?.id, canEditCurrentFamily]);
+
   const [isScrolling, setIsScrolling] = useState<boolean>(false);
+  const isScrollingRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+      }
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
       }
     };
   }, []);
@@ -614,23 +685,48 @@ export default function App() {
     setVisibleYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
   }, [activeStudentId]);
 
+  // 1.4 SCROLL BEHAVIOR: Reading, Memorization summary, Focus Notes, and Homework
+  // must ALWAYS open at the TOP (scrollTop = 0), every time the tab is opened and every time the student is switched.
+  useEffect(() => {
+    if (activeTab === 'reading') {
+      if (readingScrollRef.current) readingScrollRef.current.scrollTop = 0;
+    } else if (activeTab === 'summary') {
+      if (summaryScrollRef.current) summaryScrollRef.current.scrollTop = 0;
+    } else if (activeTab === 'focus') {
+      if (focusScrollRef.current) focusScrollRef.current.scrollTop = 0;
+    } else if (activeTab === 'homework') {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeTab, activeStudentId]);
+
+  // Helper to scroll only the list container to the target element without scrolling the browser window
+  const scrollListToTarget = (target: HTMLElement | null, behavior: ScrollBehavior = 'smooth') => {
+    const container = scrollContainerRef.current;
+    if (!container || !target) return;
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const targetTop = Math.max(0, targetRect.top - containerRect.top + container.scrollTop - 8);
+    container.scrollTo({ top: targetTop, behavior });
+  };
+
   // WhatsApp-style: Always open and scroll directly to the latest homework entry (centered in viewport)
   const scrollToLatestHomework = (smooth = false) => {
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
+    let targetEl: HTMLElement | null = null;
     if (activeStudent?.entries && activeStudent.entries.length > 0) {
       const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
       const latest = sorted[0];
       if (latest) {
-        const el = document.getElementById(`entry-row-${latest.id}`);
-        if (el) {
-          el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
-          return;
-        }
+        targetEl = document.getElementById(`entry-row-${latest.id}`);
       }
     }
-    if (latestHomeworkRef.current) {
-      latestHomeworkRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    if (!targetEl && latestHomeworkRef.current) {
+      targetEl = latestHomeworkRef.current;
+    }
+
+    if (targetEl) {
+      scrollListToTarget(targetEl, smooth ? 'smooth' : 'auto');
     } else {
       container.scrollTo({
         top: container.scrollHeight,
@@ -638,50 +734,6 @@ export default function App() {
       });
     }
   };
-
-  // WhatsApp-style: Whenever the page opens, student changes, or entries load,
-  // ensure the view immediately opens positioned at the latest homework entry (like the latest message in WhatsApp)!
-  useEffect(() => {
-    if (currentView !== 'family' || activeTab !== 'homework') return;
-    if (!activeStudent?.entries || activeStudent.entries.length === 0) return;
-
-    if (skipResetScrollToTopRef.current) {
-      skipResetScrollToTopRef.current = false;
-      return;
-    }
-
-    const snapToLatest = () => {
-      if (activeStudent.entries && activeStudent.entries.length > 0) {
-        const sorted = [...activeStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-        const latest = sorted[0];
-        if (latest) {
-          const el = document.getElementById(`entry-row-${latest.id}`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'auto', block: 'center' });
-            return;
-          }
-        }
-      }
-      if (latestHomeworkRef.current) {
-        latestHomeworkRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
-      } else if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    };
-
-    snapToLatest();
-    const f1 = requestAnimationFrame(snapToLatest);
-    const t1 = setTimeout(snapToLatest, 30);
-    const t2 = setTimeout(snapToLatest, 100);
-    const t3 = setTimeout(snapToLatest, 250);
-
-    return () => {
-      cancelAnimationFrame(f1);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, [activeStudentId, activeTab, currentView, displayedEntries.length]);
 
   // Ensure the view stays scrolled to the true bottom when a new entry is added
   useEffect(() => {
@@ -714,7 +766,7 @@ export default function App() {
     if (latest) {
       const el = document.getElementById(`entry-row-${latest.id}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollListToTarget(el, 'smooth');
       }
     }
   };
@@ -734,7 +786,7 @@ export default function App() {
     if (target) {
       const el = document.getElementById(`entry-row-${target.id}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollListToTarget(el, 'smooth');
         setHighlightedEntryId(target.id);
         setTimeout(() => {
           setHighlightedEntryId((prev) => (prev === target.id ? null : prev));
@@ -752,121 +804,86 @@ export default function App() {
     setTimeout(() => {
       const headerEl = document.getElementById(`month-header-${monthKey}`);
       if (headerEl) {
-        headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollListToTarget(headerEl, 'smooth');
       } else {
         const firstEntry = displayedEntries.find((e) => e.date.startsWith(monthKey));
         if (firstEntry) {
           const entryEl = document.getElementById(`entry-row-${firstEntry.id}`);
-          entryEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          scrollListToTarget(entryEl, 'smooth');
         }
       }
     }, 60);
   };
 
-  // When a student switch is triggered by a double-tap, wait for page render then scroll to their latest homework
-  useEffect(() => {
-    if (
-      pendingScrollToLatestStudentIdRef.current &&
-      pendingScrollToLatestStudentIdRef.current === activeStudentId
-    ) {
-      pendingScrollToLatestStudentIdRef.current = null;
-      scrollToStudentLatestHomework();
-    }
-  }, [activeStudentId, displayedEntries]);
-
-  // Handler for single-tapping student tab in bottom switcher: switches student & immediately centers their latest homework
+  // Handler for single-tapping student tab in bottom switcher: switches student without any auto-scroll
   const handleSelectStudent = (studentId: string) => {
     setActiveStudentId(studentId);
-
-    const targetStudent = data.students.find((s) => s.id === studentId);
-    const scrollAction = () => {
-      if (targetStudent && targetStudent.entries && targetStudent.entries.length > 0) {
-        const sorted = [...targetStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-        const latest = sorted[0];
-        if (latest) {
-          const el = document.getElementById(`entry-row-${latest.id}`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'auto', block: 'center' });
-            return;
-          }
-        }
-      }
-      if (latestHomeworkRef.current) {
-        latestHomeworkRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
-      }
-    };
-
-    scrollAction();
-    requestAnimationFrame(scrollAction);
-    setTimeout(scrollAction, 40);
-    setTimeout(scrollAction, 120);
-    setTimeout(scrollAction, 280);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
   };
 
   // Handler for double-tapping any student tab in the bottom switcher
   const handleDoubleTapStudent = (studentId: string) => {
-    const targetStudent = data.students.find((s) => s.id === studentId);
-    if (!targetStudent) return;
-
-    if (studentId === activeStudentId) {
-      // Already active student: scroll to their latest homework entry directly
-      scrollToStudentLatestHomework(targetStudent);
-    } else {
-      // Inactive student: prevent resetting scroll to top, switch student, then scroll to latest
-      skipResetScrollToTopRef.current = true;
-      pendingScrollToLatestStudentIdRef.current = studentId;
-
-      if (targetStudent.entries && targetStudent.entries.length > 0) {
-        const sorted = [...targetStudent.entries].sort((a, b) => b.date.localeCompare(a.date));
-        const latest = sorted[0];
-        if (latest) {
-          const [y, m] = latest.date.split('-').map(Number);
-          if (y && m && (visibleYearMonth.year !== y || visibleYearMonth.month !== m)) {
-            setVisibleYearMonth({ year: y, month: m });
-          }
-        }
-      }
-
-      setActiveStudentId(studentId);
+    setActiveStudentId(studentId);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
     }
   };
 
-  // Scroll listener: updates visible month label dynamically while scrolling and toggles WhatsApp-style floating date pill
+  // Scroll listener: throttled via requestAnimationFrame to guarantee smooth, lag-free scrolling
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
 
-    // Trigger WhatsApp-style floating date pill while scrolling
-    setIsScrolling(true);
+    // Only update isScrolling state once at scroll start to avoid re-rendering entire app on every frame
+    if (!isScrollingRef.current) {
+      isScrollingRef.current = true;
+      setIsScrolling(true);
+    }
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
     scrollTimeoutRef.current = setTimeout(() => {
+      isScrollingRef.current = false;
       setIsScrolling(false);
-    }, 850);
+    }, 600);
 
-    const container = scrollContainerRef.current;
-    const headers = container.querySelectorAll<HTMLElement>('[data-month-key]');
-    let activeKey = '';
-    headers.forEach((h) => {
-      const rect = h.getBoundingClientRect();
+    // Throttle DOM measuring with requestAnimationFrame to prevent layout thrashing and stutter
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const container = scrollContainerRef.current;
+      if (!container) return;
+
+      const headers = container.querySelectorAll<HTMLElement>('[data-month-key]');
+      if (headers.length === 0) return;
+
       const containerRect = container.getBoundingClientRect();
-      if (rect.top <= containerRect.top + 160) {
-        activeKey = h.getAttribute('data-month-key') || '';
+      let activeKey = '';
+      for (let i = 0; i < headers.length; i++) {
+        const h = headers[i];
+        const rect = h.getBoundingClientRect();
+        if (rect.top <= containerRect.top + 160) {
+          activeKey = h.getAttribute('data-month-key') || '';
+        }
+      }
+
+      if (!activeKey && headers.length > 0) {
+        activeKey = headers[0].getAttribute('data-month-key') || '';
+      }
+
+      if (activeKey) {
+        const [y, m] = activeKey.split('-');
+        const yearNum = Number(y);
+        const monthNum = Number(m);
+        setVisibleYearMonth((prev) => {
+          if (prev.year !== yearNum || prev.month !== monthNum) {
+            return { year: yearNum, month: monthNum };
+          }
+          return prev;
+        });
       }
     });
-
-    if (!activeKey && headers.length > 0) {
-      activeKey = headers[0].getAttribute('data-month-key') || '';
-    }
-
-    if (activeKey) {
-      const [y, m] = activeKey.split('-');
-      const yearNum = Number(y);
-      const monthNum = Number(m);
-      if (visibleYearMonth.year !== yearNum || visibleYearMonth.month !== monthNum) {
-        setVisibleYearMonth({ year: yearNum, month: monthNum });
-      }
-    }
   };
 
   // Entry mutation handlers
@@ -899,14 +916,18 @@ export default function App() {
     }
   };
 
-  const handleDeleteEntry = (entryId: string) => {
+  const handleDeleteEntry = (entryId: string, entryDate?: string) => {
     if (!activeStudent) return;
     setData((prev) => {
       const updatedStudents = prev.students.map((s) => {
         if (s.id !== activeStudent.id) return s;
         return {
           ...s,
-          entries: s.entries.filter((e) => e.id !== entryId),
+          entries: s.entries.filter((e) => {
+            if (e.id === entryId) return false;
+            if (entryDate && e.date === entryDate) return false;
+            return true;
+          }),
         };
       });
       return { ...prev, students: updatedStudents };
@@ -1192,6 +1213,21 @@ export default function App() {
     }
   };
 
+  // Student Focus Points Handler (Autosave shared list)
+  const handleSaveFocusPoints = (studentId: string, focusPoints: FocusPoint[]) => {
+    setData((prev) => ({
+      ...prev,
+      students: prev.students.map((st) =>
+        st.id === studentId
+          ? {
+              ...st,
+              focusPoints,
+            }
+          : st
+      ),
+    }));
+  };
+
   // Student Memorization Focus Notes & Recitation Bookmark Handler
   const handleSaveFocusNotes = (
     studentId: string,
@@ -1400,6 +1436,8 @@ export default function App() {
           onSyncToSupabase={() => syncAllLocalDataToSupabase(data)}
           onUpdateFamilyOrder={handleUpdateFamilyOrder}
           onUpdateFamilyParentPassword={handleUpdateFamilyParentPassword}
+          onAddFamily={handleAddFamily}
+          onAddStudent={handleAddStudent}
         />
         {settingsStudent && (
           <StudentSettingsModal
@@ -1452,51 +1490,28 @@ export default function App() {
     );
   }
 
-  const canEditCurrentFamily = canEdit(authState, activeFamily?.id);
-
   return (
     <div
       id="sanad-app-root"
       dir="ltr"
-      className="w-full h-screen flex flex-col bg-[#F5EFDD] text-[#1F2A3D] font-sans overflow-hidden selection:bg-[#B8860B]/20"
+      className="w-full h-screen h-[100dvh] flex flex-col bg-[#F5EFDD] text-[#1F2A3D] font-sans overflow-hidden selection:bg-[#B8860B]/20"
       style={{
         backgroundImage: `radial-gradient(circle at 10% 20%, rgba(184, 134, 11, 0.04) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(14, 92, 86, 0.05) 0%, transparent 40%)`,
       }}
     >
-      {/* Auto-hiding Header */}
-      <Header
-        authState={authState}
-        activeFamily={activeFamily}
-        families={data.families}
-        onLoginSuccess={handleLoginSuccess}
-        onLogout={handleLogout}
-        onResetData={handleResetData}
-        visible={headerVisible}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-        activeStudentName={activeStudent?.name || activeStudent?.arabicName}
-        onOpenPortal={handleOpenPortal}
-        onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
-        isSupabaseConnected={isSupabaseConnected}
-      />
-
-      {/* 4-Pill Top Navigation Bar (Fixed directly beneath Header) */}
-      <StudentTopNavPills
+      {/* Top Navigation Grid Bar: ONE dark green bar #1F5A4E replacing BOTH old header and old tab row */}
+      <TopNavGridBar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onOpenSummary={() => setActiveTab('summary')}
-        onOpenNotes={() => setActiveTab('focus')}
-        unreadCount={
-          activeStudent?.memorizationFocus
-            ? activeStudent.memorizationFocus.split('\n').filter((l) => l.trim().length > 0).length
-            : 0
-        }
+        visibleTabs={activeStudent?.visibleTabs}
+        unreadNotesCount={unreadNotesCount}
       />
 
       {/* WhatsApp-style floating small date pill for current scrolling month (appears while scrolling, fades out when idle) */}
       <div
         id="whatsapp-scroll-month-pill"
         aria-hidden={!isScrolling}
-        className={`pointer-events-none fixed top-[96px] sm:top-[102px] left-1/2 -translate-x-1/2 z-35 transition-all duration-300 ease-out ${
+        className={`pointer-events-none fixed top-[60px] sm:top-[64px] left-1/2 -translate-x-1/2 z-35 transition-all duration-300 ease-out ${
           isScrolling && activeTab === 'homework'
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-90 -translate-y-1 pointer-events-none'
@@ -1507,55 +1522,91 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <main
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        id="main-scroll-view"
-        className="flex-1 w-full overflow-y-auto pt-1 pb-24 sm:pb-28 px-2 sm:px-4"
-      >
-        <div
-          className={`w-full mx-auto flex flex-col items-stretch space-y-2 transition-all duration-300 ${
-            activeTab === 'summary' ? 'max-w-7xl' : 'max-w-[490px] sm:w-[490px]'
-          }`}
-        >
-          {/* If Reading Tab is selected, show the Reading Card */}
-          {activeTab === 'reading' && (
-            <StudentReadingCard
-              student={activeStudent}
-              onSelectTab={setActiveTab}
-              isTeacherMode={canEditCurrentFamily}
-              onUpdateStudentTilawa={handleUpdateStudentTilawa}
-            />
-          )}
+      {/* Main Content Area with Tab-Isolated Scroll Containers (1.4) */}
+      <main id="main-content-area" className="flex-1 min-h-0 w-full relative overflow-hidden flex flex-col">
+        {/* If Reading Tab is selected, show the Reading Card with dedicated scroll container */}
+        {activeTab === 'reading' && (
+          <div
+            ref={readingScrollRef}
+            id="reading-scroll-view"
+            className="flex-1 min-h-0 w-full overflow-y-auto relative pt-1 pb-4 sm:pb-6 px-2 sm:px-4"
+          >
+            <div className="w-full mx-auto flex flex-col items-stretch space-y-2 max-w-[490px] sm:w-[490px]">
+              <StudentReadingCard
+                student={activeStudent}
+                onSelectTab={setActiveTab}
+                isTeacherMode={canEditCurrentFamily}
+                onUpdateStudentTilawa={handleUpdateStudentTilawa}
+              />
+            </div>
+          </div>
+        )}
 
-          {/* If Memorization Summary Tab is selected, show the Full In-Page Summary View */}
-          {activeTab === 'summary' && (
-            <StudentMemorizationSummaryView
-              student={activeStudent}
-              isTeacherMode={canEditCurrentFamily}
-              onUpdateSurahStatus={(surahNumber, status) => {
-                if (activeStudent) {
-                  handleModalUpdateSurahStatus(activeStudent.id, surahNumber, status);
-                }
-              }}
-              onReturnToHomework={() => setActiveTab('homework')}
-            />
-          )}
+        {/* If Progress Tab is selected (renamed from Memorization Summary), show the Full In-Page Summary View */}
+        {activeTab === 'progress' && (
+          <div
+            ref={summaryScrollRef}
+            id="summary-scroll-view"
+            className="flex-1 min-h-0 w-full overflow-y-auto relative pt-1 pb-4 sm:pb-6 px-2 sm:px-4"
+          >
+            <div className="w-full mx-auto flex flex-col items-stretch space-y-2 max-w-7xl">
+              <StudentMemorizationSummaryView
+                student={activeStudent}
+                isTeacherMode={canEditCurrentFamily}
+                onUpdateSurahStatus={(surahNumber, status) => {
+                  if (activeStudent) {
+                    handleModalUpdateSurahStatus(activeStudent.id, surahNumber, status);
+                  }
+                }}
+                onReturnToHomework={() => setActiveTab('homework')}
+              />
+            </div>
+          </div>
+        )}
 
-          {/* If Focus Notes Tab is selected, show the Focus Notes View */}
-          {activeTab === 'focus' && (
-            <StudentFocusNotesView
-              student={activeStudent}
-              onSelectTab={setActiveTab}
-              isTeacherMode={canEditCurrentFamily}
-              onSaveFocusNotes={handleSaveFocusNotes}
-            />
-          )}
+        {/* If Videos Tab is selected, show the dedicated Videos View */}
+        {activeTab === 'videos' && (
+          <div
+            id="videos-scroll-view"
+            className="flex-1 min-h-0 w-full overflow-y-auto relative pt-1 pb-4 sm:pb-6 px-2 sm:px-4"
+          >
+            <div className="w-full mx-auto flex flex-col items-stretch space-y-2 max-w-[490px] sm:w-[490px]">
+              <StudentVideosView
+                student={activeStudent}
+                isTeacherMode={canEditCurrentFamily}
+              />
+            </div>
+          </div>
+        )}
 
-          {/* List of Homework Entries across months with sticky month headers (Visible when activeTab === 'homework') */}
-          {activeTab === 'homework' && (
-            <div id="homework-list" className="space-y-1.5 pt-0.5">
+        {/* If Notes Tab is selected (renamed from Focus Notes), show the Focus Notes View with dedicated scroll container */}
+        {activeTab === 'notes' && (
+          <div
+            ref={focusScrollRef}
+            id="focus-scroll-view"
+            className="flex-1 min-h-0 w-full overflow-y-auto relative pt-1 pb-4 sm:pb-6 px-2 sm:px-4"
+          >
+            <div className="w-full mx-auto flex flex-col items-stretch space-y-2 max-w-[490px] sm:w-[490px]">
+              <StudentFocusNotesView
+                student={activeStudent}
+                onSelectTab={setActiveTab}
+                isTeacherMode={canEditCurrentFamily}
+                onSaveFocusPoints={handleSaveFocusPoints}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* List of Homework Entries across months with sticky month headers (Visible when activeTab === 'homework') */}
+        {activeTab === 'homework' && (
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            id="main-scroll-view"
+            className="flex-1 min-h-0 w-full overflow-y-auto relative pt-1 pb-4 sm:pb-6 px-2 sm:px-4"
+          >
+            <div className="w-full mx-auto flex flex-col items-stretch space-y-2 max-w-[490px] sm:w-[490px]">
+              <div id="homework-list" className="space-y-1.5 pt-0.5">
             {displayedEntries.length === 0 ? (
               <div
                 id="empty-homework-state"
@@ -1717,11 +1768,12 @@ export default function App() {
               />
             )}
 
-            {/* Bottom Breathing Room Spacer to guarantee full centering and visibility above bottom switcher */}
-            <div id="homework-list-bottom-spacer" className="h-32 sm:h-44 w-full shrink-0" aria-hidden="true" />
+            {/* Bottom Breathing Room Spacer to guarantee clean spacing above bottom switcher */}
+            <div id="homework-list-bottom-spacer" className="h-10 sm:h-14 w-full shrink-0" aria-hidden="true" />
           </div>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Month Selection Bottom Sheet */}
@@ -1734,33 +1786,35 @@ export default function App() {
         onSelectMonth={handleSelectMonthFromPicker}
       />
 
-      {/* Fixed Compact Bottom Student Switcher */}
-      <StudentSwitcher
+      {/* Fixed Bottom Bar: ONE bar, #FBF8F0, with full-name student switcher & Voice AI + Menu buttons */}
+      <AppBottomBar
         students={visibleStudents}
         activeStudentId={activeStudentId}
         onSelectStudent={handleSelectStudent}
         onDoubleTapStudent={handleDoubleTapStudent}
+        isTeacherMode={isTeacher && teacherModeActive}
+        onToggleTeacherMode={handleToggleTeacherMode}
+        onOpenTeacherLogin={() => setIsTeacherPasswordModalOpen(true)}
+        onOpenVoiceDictation={() => setIsVoiceModalOpen(true)}
+        isSupabaseConnected={isSupabaseConnected}
+        authState={authState}
+        onLogout={handleLogout}
+        onOpenPortal={handleOpenPortal}
+        onOpenAttendance={() => setIsFamilyAttendanceOpen(true)}
+        onOpenStudentSettings={(st) => setSettingsStudentId(st.id)}
+        onResetData={handleResetData}
       />
 
-      {/* Slide-out Sidebar Drawer dedicated to Current Student */}
-      <StudentSidebarDrawer
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        student={activeStudent}
-        familyName={activeFamily?.name}
-        familyId={activeFamily?.id}
-        isTeacherMode={canEditCurrentFamily}
-        onUpdateStudentTilawa={handleUpdateStudentTilawa}
-        onUpdateStudentAttendanceDays={(stId, days) => handleSaveStudentAttendance(stId, days)}
-        onOpenSurahProgress={(st) => setSelectedSurahStudent(st)}
-        onOpenPortal={handleOpenPortal}
-        onOpenFocusNotes={() => {
-          setIsSidebarOpen(false);
-          setActiveTab('focus');
-        }}
-        onOpenStudentSettings={(st) => {
-          setIsSidebarOpen(false);
-          setSettingsStudentId(st.id);
+      {/* Teacher / Parent Password Modal */}
+      <TeacherPasswordModal
+        isOpen={isTeacherPasswordModalOpen}
+        onClose={() => setIsTeacherPasswordModalOpen(false)}
+        families={data.families}
+        onLoginSuccess={(auth) => {
+          handleLoginSuccess(auth);
+          if (auth.role === 'teacher') {
+            setTeacherModeActive(true);
+          }
         }}
       />
 

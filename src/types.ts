@@ -1,4 +1,4 @@
-export type GradeValue = 100 | 80 | 60 | 40 | 20;
+export type GradeValue = number;
 
 export type SurahMemorizationStatus =
   | 'not_memorized'
@@ -15,6 +15,11 @@ export interface Entry {
   hifzGrade: GradeValue | null;
   murajaaText: string;
   murajaaGrade: GradeValue | null;
+  thirdText?: string;
+  thirdGrade?: GradeValue | null;
+  fourthText?: string;
+  fourthGrade?: GradeValue | null;
+  homeworkCount?: number; // 1, 2, 3, or 4
   onTimeScore?: number | null; // Evaluation for lesson entry punctuality (60-100)
 }
 
@@ -24,6 +29,23 @@ export interface ManualWeeklyStars {
   disabledAuto?: boolean; // When true, automatic star calculation is disabled
   title?: string; // Optional custom title for this specific week
   message?: string; // Optional custom motivational message for this specific week
+}
+
+export type StudentTopNavTab = 'homework' | 'reading' | 'progress' | 'videos' | 'notes';
+
+export interface TeacherNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  pinned: boolean;
+  done: boolean;
+}
+
+export interface FocusPoint {
+  id: string;
+  text: string;
+  order: number;
+  updatedAt: string;
 }
 
 export interface Student {
@@ -41,8 +63,10 @@ export interface Student {
   tilawaSurah?: number; // Surah number (1-114) for current Tilawa
   tilawaAyah?: number; // Current Ayah number within the selected Surah
   memorizationFocus?: string; // Things student needs to focus on in memorization
+  focusPoints?: FocusPoint[]; // Shared focus points list
   motivationalMessage?: string; // Teacher custom motivational message displayed in the weekly star banner
   shareToken?: string; // Revocable security token for student direct link
+  visibleTabs?: StudentTopNavTab[]; // Per-student tab visibility configuration
 }
 
 export type UserRole = 'student' | 'parent' | 'teacher';

@@ -9,12 +9,10 @@ import {
   ZoomIn,
   Trash2,
   Calendar,
-  Share2,
   Check,
   Link2,
   AlertTriangle,
   RotateCw,
-  RefreshCw,
   Lock,
 } from 'lucide-react';
 import { Student } from '../types';
@@ -48,7 +46,6 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
   const [showPhotoControls, setShowPhotoControls] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [shareToken, setShareToken] = useState<string>(student.shareToken || student.id.slice(0, 8));
-  const [tokenNotice, setTokenNotice] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
   const [fileError, setFileError] = useState<string | null>(null);
 
@@ -124,33 +121,6 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
-  };
-
-  const handleRegenerateToken = () => {
-    const newToken = Math.random().toString(36).substring(2, 10);
-    setShareToken(newToken);
-    if (onUpdateStudentShareToken) {
-      onUpdateStudentShareToken(student.id, newToken);
-    }
-    setTokenNotice('Token regenerated successfully! Previous link has been invalidated.');
-    setTimeout(() => setTokenNotice(null), 4500);
-  };
-
-  const handleNativeShare = async () => {
-    const url = getShareUrl();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Homework tracker for ${student.name}`,
-          text: `Daily memorization and recitation tracker for ${student.name}`,
-          url: url,
-        });
-      } catch {
-        handleCopyLink();
-      }
-    } else {
-      handleCopyLink();
-    }
   };
 
   // Client-side Image Compression via HTML5 Canvas
@@ -690,96 +660,31 @@ export const StudentSettingsModal: React.FC<StudentSettingsModalProps> = ({
               </section>
 
               {/* =========================================================================
-                  Section 3: Shareable Direct Link
+                  Section 3: Shareable Direct Link (Copy Link Only)
                  ========================================================================= */}
-              <section id="settings-section-share-link" className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[#0E5C56]">
-                    <Link2 className="w-4.5 h-4.5 text-[#B8860B]" />
-                    <h3 className="text-xs sm:text-sm font-bold text-[#0E5C56]">
-                      Direct Student Link
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-bold text-[#16A34A] bg-[#16A34A]/15 px-2.5 py-0.5 rounded-full">
-                    Direct for {student.name}
-                  </span>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[#B8860B]/25 p-3.5 sm:p-4 shadow-2xs space-y-3">
-                  {/* Security Warning Label */}
-                  <div className="p-3 bg-amber-50/80 border border-amber-300/80 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="block font-bold mb-0.5">Privacy Notice:</strong>
-                      <span>
-                        Anyone with this direct link can view this student&apos;s homework and progress without a password. If shared accidentally, you can invalidate it anytime by clicking &quot;Regenerate Link&quot; below.
-                      </span>
-                    </div>
-                  </div>
-
-                  {tokenNotice && (
-                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{tokenNotice}</span>
-                    </div>
+              <section id="settings-section-share-link" className="pt-1">
+                <button
+                  id="modal-copy-share-btn"
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-[0.99] border ${
+                    copiedLink
+                      ? 'bg-[#16A34A] text-white border-[#16A34A]'
+                      : 'bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border-[#0E5C56]'
+                  }`}
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-4 h-4 text-[#B8860B]" />
+                      <span>Copy Link</span>
+                    </>
                   )}
-
-                  {/* URL Display and Action Buttons */}
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      readOnly
-                      value={getShareUrl()}
-                      className="flex-1 bg-[#FAF6EE] border border-[#B8860B]/30 rounded-xl px-2.5 py-2 text-[11px] text-[#5B6478] font-mono select-all focus:outline-none focus:ring-1 focus:ring-[#0E5C56]/30 truncate"
-                    />
-
-                    <button
-                      id="modal-copy-share-btn"
-                      type="button"
-                      onClick={handleCopyLink}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs ${
-                        copiedLink
-                          ? 'bg-[#16A34A] text-white border border-[#16A34A]'
-                          : 'bg-[#0E5C56] hover:bg-[#0A423E] text-[#F1E7CE] border border-[#0E5C56]'
-                      }`}
-                    >
-                      {copiedLink ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Link2 className="w-3.5 h-3.5 text-[#B8860B]" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Revoke / Regenerate Token Button */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      id="modal-native-share-btn"
-                      type="button"
-                      onClick={handleNativeShare}
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-[#FBF6E8] hover:bg-[#F3EAD3] border border-[#B8860B]/30 text-[#0E5C56] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
-                    >
-                      <Share2 className="w-4 h-4 text-[#B8860B]" />
-                      <span>Share via WhatsApp / App</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleRegenerateToken}
-                      title="Invalidates the old link immediately"
-                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-red-50 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Regenerate Link</span>
-                    </button>
-                  </div>
-                </div>
+                </button>
               </section>
             </div>
 

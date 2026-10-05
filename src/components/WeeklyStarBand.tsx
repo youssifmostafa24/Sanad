@@ -429,7 +429,7 @@ export const WeeklyStarBand: React.FC<WeeklyStarBandProps> = ({
         <div className="relative z-10 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-4 w-full">
           {/* Left: Title without truncation (wraps and expands card height as needed) */}
           <div className="flex-1 min-w-[160px] py-0.5 pr-1">
-            <h3 className="text-[14px] sm:text-[16px] md:text-[17px] font-extrabold tracking-tight text-[#8C6700] leading-snug font-sans break-words [overflow-wrap:anywhere]">
+            <h3 className="text-[14px] sm:text-[16px] md:text-[17px] font-normal tracking-tight text-[#8C6700] leading-snug font-sans break-words [overflow-wrap:anywhere]">
               {initialEffectiveTitle}
             </h3>
           </div>
