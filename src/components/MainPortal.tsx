@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthState, Family, Student } from '../types';
 import {
   Shield,
@@ -75,6 +75,14 @@ export const MainPortal: React.FC<MainPortalProps> = ({
   const [newFamilyName, setNewFamilyName] = useState('');
   const [addingStudentFamilyId, setAddingStudentFamilyId] = useState<string | null>(null);
   const [newStudentName, setNewStudentName] = useState('');
+
+  // مرجع للإشارة إلى أسفل الصفحة
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // التمرير التلقائي إلى أسفل الصفحة عند فتحها أو تغيير الصفحة/الإعدادات
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [isSettingsOpen]);
 
   // If teacher mode is turned off, settings page cannot remain open
   useEffect(() => {
@@ -550,8 +558,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
       ) : (
         /* ==================== HOME PAGE ==================== */
         <div className="flex-1 flex flex-col">
-          {/* Header bar (dark green #1F5A4E): small shield icon circle + title "Quran Homework Portal" on the left (single line, 17px, weight 500).
-              On the right put ONE 44px round icon button: a settings (gear) icon, aria-label "Settings". */}
+          {/* Header bar */}
           <header className="sticky top-0 z-40 bg-[#1F5A4E] text-[#F1E7CE] shadow-sm">
             <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -593,12 +600,12 @@ export const MainPortal: React.FC<MainPortalProps> = ({
 
                 return (
                   <div key={fam.id} id={`portal-family-${fam.id}`} className="w-full">
-                    {/* Plain text label (13px, weight 500, #5E6B66) with students' names joined by " · " */}
+                    {/* Plain text label */}
                     <div className="text-[13px] font-medium text-[#5E6B66] leading-none mb-2 px-0.5">
                       {namesLabel || fam.name}
                     </div>
 
-                    {/* 3-column grid (gap 10px) of student cards, left-aligned even when 1-2 students */}
+                    {/* 3-column grid */}
                     <div className="grid grid-cols-3 gap-[10px] w-full">
                       {famStudents.map((st) => (
                         <div
@@ -648,6 +655,9 @@ export const MainPortal: React.FC<MainPortalProps> = ({
           </footer>
         </div>
       )}
+
+      {/* نقطة نهاية الصفحة للتمرير إليها تلقائيًا */}
+      <div ref={bottomRef} />
 
       {/* Confirmation Modal for Cloud Sync */}
       {showSyncConfirm && (
