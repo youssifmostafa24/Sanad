@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { Family, Student, Entry, SurahMemorizationStatus, GradeValue, ManualWeeklyStars, AuthState, StudentTopNavTab, FocusPoint } from './types';
 import { getMigratedFocusPoints } from './utils/notesUtils';
 import { getInitialData } from './data/seedData';
@@ -685,8 +685,9 @@ export default function App() {
     setVisibleYearMonth({ year: n.getFullYear(), month: n.getMonth() + 1 });
   }, [activeStudentId]);
 
-  // 1.4 SCROLL BEHAVIOR: Reading, Memorization summary, Focus Notes, and Homework
-  // must ALWAYS open at the TOP (scrollTop = 0), every time the tab is opened and every time the student is switched.
+  // 1.4 SCROLL BEHAVIOR: Reading, Memorization summary and Focus Notes ALWAYS open at the TOP
+  // (scrollTop = 0), every time the tab is opened and every time the student is switched.
+  // The HOMEWORK tab is NOT reset here: it opens at the END of the list (see the block below).
   useEffect(() => {
     if (activeTab === 'reading') {
       if (readingScrollRef.current) readingScrollRef.current.scrollTop = 0;
@@ -694,10 +695,87 @@ export default function App() {
       if (summaryScrollRef.current) summaryScrollRef.current.scrollTop = 0;
     } else if (activeTab === 'focus') {
       if (focusScrollRef.current) focusScrollRef.current.scrollTop = 0;
-    } else if (activeTab === 'homework') {
-      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
     }
   }, [activeTab, activeStudentId]);
+
+  // ---------------------------------------------------------------------------
+  // HOMEWORK TAB: open ALREADY positioned at the END of the list (the latest homework),
+  // before the first paint, so the user never sees the list at the top or any jump.
+  // ---------------------------------------------------------------------------
+  // True for a moment after a programmatic scroll, so handleScroll doesn't flash the floating month pill.
+  const programmaticScrollRef = useRef<boolean>(false);
+  const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pinHomeworkToEnd = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    programmaticScrollRef.current = true;
+    if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
+    programmaticScrollTimerRef.current = setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 150);
+    container.style.scrollBehavior = 'auto'; // never animate the initial positioning
+    container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+  };
+
+  // Runs synchronously after the DOM is built and BEFORE the browser paints:
+  // on first open, when returning to the Homework tab, and when switching student.
+  useLayoutEffect(() => {
+    if (currentView !== 'family' || activeTab !== 'homework') return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    let pinned = true;
+    const stopPinning = () => {
+      pinned = false;
+    };
+
+    pinHomeworkToEnd();
+
+    // Keep the list pinned to the end while the layout settles (fonts, late data, avatars),
+    // and stop as soon as the user touches the list or after 1.5s.
+    const content = container.firstElementChild as HTMLElement | null;
+    const ro =
+      typeof ResizeObserver !== 'undefined' && content
+        ? new ResizeObserver(() => {
+            if (pinned) pinHomeworkToEnd();
+          })
+        : null;
+    if (ro && content) ro.observe(content);
+
+    const fonts = (document as any).fonts;
+    if (fonts && fonts.ready) {
+      fonts.ready.then(() => {
+        if (pinned) pinHomeworkToEnd();
+      });
+    }
+
+    container.addEventListener('touchstart', stopPinning, { passive: true });
+    container.addEventListener('pointerdown', stopPinning, { passive: true });
+    container.addEventListener('wheel', stopPinning, { passive: true });
+    container.addEventListener('keydown', stopPinning);
+    const stopTimer = setTimeout(stopPinning, 1500);
+
+    return () => {
+      pinned = false;
+      clearTimeout(stopTimer);
+      if (ro) ro.disconnect();
+      container.removeEventListener('touchstart', stopPinning);
+      container.removeEventListener('pointerdown', stopPinning);
+      container.removeEventListener('wheel', stopPinning);
+      container.removeEventListener('keydown', stopPinning);
+    };
+  }, [activeTab, activeStudentId, currentView]);
+
+  // If the very first data arrives late (empty list -> has entries), position at the end once.
+  const prevEntriesCountRef = useRef<number>(0);
+  useLayoutEffect(() => {
+    const prev = prevEntriesCountRef.current;
+    prevEntriesCountRef.current = displayedEntries.length;
+    if (prev === 0 && displayedEntries.length > 0 && currentView === 'family' && activeTab === 'homework') {
+      pinHomeworkToEnd();
+    }
+  }, [displayedEntries.length]);
 
   // Helper to scroll only the list container to the target element without scrolling the browser window
   const scrollListToTarget = (target: HTMLElement | null, behavior: ScrollBehavior = 'smooth') => {
@@ -815,38 +893,45 @@ export default function App() {
     }, 60);
   };
 
-  // Handler for single-tapping student tab in bottom switcher: switches student without any auto-scroll
+  // Handler for single-tapping student tab in bottom switcher: switches student.
+  // The layout effect above positions the new student's list at the end before paint.
   const handleSelectStudent = (studentId: string) => {
     setActiveStudentId(studentId);
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
-    }
   };
 
-  // Handler for double-tapping any student tab in the bottom switcher
+  // Handler for double-tapping any student tab in the bottom switcher: switch and glide to the latest homework
   const handleDoubleTapStudent = (studentId: string) => {
     setActiveStudentId(studentId);
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
-    }
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTo({
+          top: Math.max(0, container.scrollHeight - container.clientHeight),
+          behavior: 'smooth',
+        });
+      }
+    });
   };
 
   // Scroll listener: throttled via requestAnimationFrame to guarantee smooth, lag-free scrolling
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
 
-    // Only update isScrolling state once at scroll start to avoid re-rendering entire app on every frame
-    if (!isScrollingRef.current) {
-      isScrollingRef.current = true;
-      setIsScrolling(true);
+    // Only update isScrolling state once at scroll start to avoid re-rendering entire app on every frame.
+    // Skipped for programmatic scrolls (e.g. opening at the end) so the floating month pill doesn't flash.
+    if (!programmaticScrollRef.current) {
+      if (!isScrollingRef.current) {
+        isScrollingRef.current = true;
+        setIsScrolling(true);
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+        setIsScrolling(false);
+      }, 600);
     }
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    scrollTimeoutRef.current = setTimeout(() => {
-      isScrollingRef.current = false;
-      setIsScrolling(false);
-    }, 600);
 
     // Throttle DOM measuring with requestAnimationFrame to prevent layout thrashing and stutter
     if (scrollRafRef.current) return;

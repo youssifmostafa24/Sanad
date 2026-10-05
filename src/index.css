@@ -45,8 +45,7 @@ html, body {
   overscroll-behavior-y: contain;
 }
 
-[id^="entry-row-"] {
-  content-visibility: auto;
-  contain-intrinsic-size: 76px;
-}
+/* NOTE: content-visibility:auto was removed from the entry rows. Off-screen rows were measured at a fixed
+   estimate (76px) and then grew to their real height when scrolled into view, which made the list jump
+   (especially on iOS Safari, which has no scroll anchoring) and made "open at the end" unreliable. */
 
