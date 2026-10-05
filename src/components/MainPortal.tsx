@@ -79,10 +79,24 @@ export const MainPortal: React.FC<MainPortalProps> = ({
   // مرجع للإشارة إلى أسفل الصفحة
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // التمرير التلقائي إلى أسفل الصفحة عند فتحها أو تغيير الصفحة/الإعدادات
+  // التمرير المضمون إلى أسفل الصفحة عند فتحها أو التبديل بين الشاشات
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [isSettingsOpen]);
+    const scrollToBottom = () => {
+      // 1. تمرير نافذة المتصفح الرئيسية
+      window.scrollTo({
+        top: document.documentElement.scrollHeight || document.body.scrollHeight,
+        behavior: 'smooth',
+      });
+
+      // 2. تمرير المرجع السفلي إذا كانت الصفحة داخل container مخصص
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    };
+
+    // تأخير بسيط لضمان اكتمال الـ Render من قِبل المتصفح
+    const timer = setTimeout(scrollToBottom, 100);
+
+    return () => clearTimeout(timer);
+  }, [isSettingsOpen, families]);
 
   // If teacher mode is turned off, settings page cannot remain open
   useEffect(() => {
@@ -239,7 +253,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
   };
 
   return (
-    <div id="main-portal-view" className="min-h-screen bg-[#F5EFDD] flex flex-col justify-between" dir="ltr">
+    <div id="main-portal-view" className="min-h-screen bg-[#F5EFDD] flex flex-col justify-between overflow-y-auto" dir="ltr">
       {/* Toast Notification */}
       {syncStatusMsg && (
         <div className="w-full bg-[#1F5A4E] text-[#F1E7CE] px-4 py-2 text-center text-xs font-medium border-b border-[#FAC775]/40 animate-fade-in shadow-inner">
@@ -657,7 +671,7 @@ export const MainPortal: React.FC<MainPortalProps> = ({
       )}
 
       {/* نقطة نهاية الصفحة للتمرير إليها تلقائيًا */}
-      <div ref={bottomRef} />
+      <div ref={bottomRef} className="h-1" />
 
       {/* Confirmation Modal for Cloud Sync */}
       {showSyncConfirm && (
